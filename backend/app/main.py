@@ -1,21 +1,26 @@
-from fastapi import FastAPI, HTTPException
-from sqlalchemy import text
+from fastapi import Depends, FastAPI, HTTPException
+from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
-
-from .database import engine
-
-from fastapi import Depends
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from .database import get_db
-from .models import User
-from .schemas import LoginRequest, TokenResponse
-from .security import create_access_token, verify_password
-from .security import get_current_user
+from .database import engine, get_db
+from .models import Customer, Membership, Tenant, User
+from .schemas import (
+    CustomerResponse,
+    LoginRequest,
+    TokenResponse,
+)
+from .security import (
+    create_access_token,
+    get_current_user,
+    require_tenant_membership,
+    verify_password,
+)
 
-from .models import Membership, Tenant
-from .security import require_tenant_membership
+from fastapi import status
+from sqlalchemy.exc import IntegrityError
+from .schemas import CustomerCreate
+
 app = FastAPI(
     title="OmniAgent API",
     description="API del sistema de atención omnicanal OmniAgent",
@@ -106,3 +111,58 @@ def get_my_tenant(
         "organization": tenant.name,
         "role": membership.role,
     }
+
+
+@app.get(
+    "/tenants/{tenant_id}/customers",
+    response_model=list[CustomerResponse],
+)
+def list_customers(
+    tenant_id: int,
+    membership: Membership = Depends(require_tenant_membership),
+    db: Session = Depends(get_db),
+):
+    customers = db.scalars(
+        select(Customer)
+        .where(Customer.tenant_id == membership.tenant_id)
+        .order_by(Customer.id)
+    ).all()
+
+    return customers
+
+
+@app.post(
+    "/tenants/{tenant_id}/customers",
+    response_model=CustomerResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_customer(
+    tenant_id: int,
+    customer_data: CustomerCreate,
+    membership: Membership = Depends(require_tenant_membership),
+    db: Session = Depends(get_db),
+):
+    if membership.role not in ("owner", "admin"):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para registrar clientes",
+        )
+
+    customer = Customer(
+        tenant_id=membership.tenant_id,
+        external_id=customer_data.external_id,
+        name=customer_data.name,
+    )
+
+    try:
+        db.add(customer)
+        db.commit()
+        db.refresh(customer)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail="Ya existe un cliente con ese identificador en la organización",
+        )
+
+    return customer
