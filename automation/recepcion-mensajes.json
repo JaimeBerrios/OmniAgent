@@ -58,11 +58,112 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        448,
+        896,
         0
       ],
       "id": "60c81dec-4ddb-42e3-9c41-c475edb550a8",
       "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.mensaje.toLowerCase() }}",
+                    "rightValue": "información",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "3819d40d-c7c4-420d-a327-725f60d68363"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "informacion"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.5,
+      "position": [
+        448,
+        0
+      ],
+      "id": "fb5590d1-6bcb-432c-a6b2-02ed8d747b88",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f58c1c99-e7d5-4783-8ac6-65a820a83e33",
+              "name": "respuesta",
+              "value": "¡Hola! Gracias por contactarnos. Con gusto podemos brindarte información sobre nuestros servicios.",
+              "type": "string"
+            },
+            {
+              "id": "c131b17a-4124-4c49-b9b4-81188b35a6c0",
+              "name": "cliente_id",
+              "value": "={{ $json.cliente_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        672,
+        0
+      ],
+      "id": "fb3ecaf2-7de6-4b64-b35e-4e2eebda90b4",
+      "name": "Edit Fields1"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "84d08cfe-5771-44c0-a2d6-67ce3510749a",
+              "name": "respuesta",
+              "value": "¡Hola! Gracias por escribirnos. Hemos recibido tu mensaje y pronto te ayudaremos con tu consulta.",
+              "type": "string"
+            },
+            {
+              "id": "2eb728ac-8f3f-47ab-a1ce-3870a3e3b717",
+              "name": "cliente_id",
+              "value": "={{ $json.cliente_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        720,
+        144
+      ],
+      "id": "24902f62-ed39-4aa1-8bee-6de184603549",
+      "name": "Edit Fields2"
     }
   ],
   "pinData": {},
@@ -82,6 +183,46 @@
       "main": [
         [
           {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
             "node": "Respond to Webhook",
             "type": "main",
             "index": 0
@@ -95,7 +236,7 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "d941f212-ae84-4adc-9f41-1e499aabccbb",
+  "versionId": "3bba5a9e-c06e-4c16-8613-74903e146166",
   "meta": {
     "instanceId": "a8bf9f2b118e7cc9b8492c9a70a2d152c7efa26d5150973a9b726e405d5ab1d7"
   },
