@@ -50,7 +50,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ $json }}",
+        "responseBody": "={{ {\n  respuesta: $('Edit Fields').item.json.mensaje.toLowerCase().includes('información')\n    ? $('Edit Fields1').first().json.respuesta\n    : $('Edit Fields2').first().json.respuesta,\n  cliente_id: $('Edit Fields').item.json.cliente_id\n} }}",
         "options": {
           "responseCode": 200
         }
@@ -58,7 +58,7 @@
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.5,
       "position": [
-        896,
+        1344,
         0
       ],
       "id": "60c81dec-4ddb-42e3-9c41-c475edb550a8",
@@ -78,7 +78,7 @@
                 },
                 "conditions": [
                   {
-                    "leftValue": "={{ $json.mensaje.toLowerCase() }}",
+                    "leftValue": "={{ $('Edit Fields').item.json.mensaje.toLowerCase() }}",
                     "rightValue": "información",
                     "operator": {
                       "type": "string",
@@ -101,7 +101,7 @@
       "type": "n8n-nodes-base.switch",
       "typeVersion": 3.5,
       "position": [
-        448,
+        672,
         0
       ],
       "id": "fb5590d1-6bcb-432c-a6b2-02ed8d747b88",
@@ -120,7 +120,7 @@
             {
               "id": "c131b17a-4124-4c49-b9b4-81188b35a6c0",
               "name": "cliente_id",
-              "value": "={{ $json.cliente_id }}",
+              "value": "={{ $('Edit Fields').item.json.cliente_id }}",
               "type": "string"
             }
           ]
@@ -130,7 +130,7 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.5,
       "position": [
-        672,
+        896,
         0
       ],
       "id": "fb3ecaf2-7de6-4b64-b35e-4e2eebda90b4",
@@ -149,7 +149,7 @@
             {
               "id": "2eb728ac-8f3f-47ab-a1ce-3870a3e3b717",
               "name": "cliente_id",
-              "value": "={{ $json.cliente_id }}",
+              "value": "={{ $('Edit Fields').item.json.cliente_id }}",
               "type": "string"
             }
           ]
@@ -159,11 +159,119 @@
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.5,
       "position": [
-        720,
+        944,
         144
       ],
       "id": "24902f62-ed39-4aa1-8bee-6de184603549",
       "name": "Edit Fields2"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/messages/inbound",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "cliente_id",
+              "value": "={{ $('Edit Fields').item.json.cliente_id }}"
+            },
+            {
+              "name": "mensaje",
+              "value": "={{ $('Edit Fields').item.json.mensaje }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        448,
+        0
+      ],
+      "id": "89c721ee-c9c8-433b-adf7-2cc8221e3ac6",
+      "name": "HTTP Request",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "eBkOFYpduFgwJyIl",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/messages/outbound",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "conversation_id",
+              "value": "={{ $('HTTP Request').item.json.conversation_id }}"
+            },
+            {
+              "name": "respuesta",
+              "value": "={{ $('Edit Fields1').item.json.respuesta }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1120,
+        0
+      ],
+      "id": "a87ebbfc-d1f9-4f89-8f5a-914319cd1d88",
+      "name": "Registrar respuesta - Información",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "eBkOFYpduFgwJyIl",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/messages/outbound",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "conversation_id",
+              "value": "={{ $('HTTP Request').item.json.conversation_id }}"
+            },
+            {
+              "name": "respuesta",
+              "value": "={{ $('Edit Fields2').item.json.respuesta }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1168,
+        144
+      ],
+      "id": "1652730a-e3a3-4c9e-97a4-747264c9197d",
+      "name": "Registrar respuesta - General",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "eBkOFYpduFgwJyIl",
+          "name": "Header Auth account"
+        }
+      }
     }
   ],
   "pinData": {},
@@ -183,7 +291,7 @@
       "main": [
         [
           {
-            "node": "Switch",
+            "node": "HTTP Request",
             "type": "main",
             "index": 0
           }
@@ -212,7 +320,7 @@
       "main": [
         [
           {
-            "node": "Respond to Webhook",
+            "node": "Registrar respuesta - Información",
             "type": "main",
             "index": 0
           }
@@ -220,6 +328,39 @@
       ]
     },
     "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Registrar respuesta - General",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar respuesta - Información": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Registrar respuesta - General": {
       "main": [
         [
           {
@@ -236,7 +377,7 @@
     "executionOrder": "v1",
     "binaryMode": "separate"
   },
-  "versionId": "3bba5a9e-c06e-4c16-8613-74903e146166",
+  "versionId": "4ef31d74-1b7e-4978-b01f-796523e06852",
   "meta": {
     "instanceId": "a8bf9f2b118e7cc9b8492c9a70a2d152c7efa26d5150973a9b726e405d5ab1d7"
   },
