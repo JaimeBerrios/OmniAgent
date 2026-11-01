@@ -1,11 +1,15 @@
-from fastapi import Depends, FastAPI, HTTPException
+
+from fastapi import Depends, FastAPI, HTTPException, status
 from sqlalchemy import select, text
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from .database import engine, get_db
-from .models import Customer, Membership, Tenant, User
+from .models import Conversation, Customer, Membership, Tenant, User
 from .schemas import (
+    ConversationCreate,
+    ConversationResponse,
+    CustomerCreate,
     CustomerResponse,
     LoginRequest,
     TokenResponse,
@@ -17,22 +21,22 @@ from .security import (
     verify_password,
 )
 
-from fastapi import status
-from sqlalchemy.exc import IntegrityError
-from .schemas import CustomerCreate
 
 app = FastAPI(
     title="OmniAgent API",
-    description="API del sistema de atención omnicanal OmniAgent",
-    version="0.1.0",
+    description="API de gestión omnicanal multi-tenant",
+    version="1.0.0",
 )
 
+
+# ----------------------------------------
+# GENERAL
+# ----------------------------------------
 
 @app.get("/")
 def root():
     return {
         "application": "OmniAgent",
-        "version": "0.1.0",
         "status": "running",
     }
 
@@ -51,12 +55,22 @@ def health():
     except SQLAlchemyError:
         raise HTTPException(
             status_code=503,
-            detail="Database unavailable",
+            detail="Base de datos no disponible",
         )
 
 
-@app.post("/auth/login", response_model=TokenResponse)
-def login(credentials: LoginRequest, db: Session = Depends(get_db)):
+# ----------------------------------------
+# AUTENTICACIÓN
+# ----------------------------------------
+
+@app.post(
+    "/auth/login",
+    response_model=TokenResponse,
+)
+def login(
+    credentials: LoginRequest,
+    db: Session = Depends(get_db),
+):
     email = credentials.email.strip().lower()
 
     user = db.scalar(
@@ -73,17 +87,16 @@ def login(credentials: LoginRequest, db: Session = Depends(get_db)):
     ):
         raise HTTPException(
             status_code=401,
-            detail="Credenciales incorrectas",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Credenciales inválidas",
         )
 
     return TokenResponse(
-        access_token=create_access_token(user.id)
+        access_token=create_access_token(user.id),
     )
 
 
 @app.get("/auth/me")
-def get_my_profile(
+def get_profile(
     current_user: User = Depends(get_current_user),
 ):
     return {
@@ -93,8 +106,13 @@ def get_my_profile(
     }
 
 
+# ----------------------------------------
+# ORGANIZACIONES
+# ----------------------------------------
+
 @app.get("/tenants/{tenant_id}/me")
-def get_my_tenant(
+def get_tenant_profile(
+    tenant_id: int,
     membership: Membership = Depends(require_tenant_membership),
     db: Session = Depends(get_db),
 ):
@@ -112,6 +130,10 @@ def get_my_tenant(
         "role": membership.role,
     }
 
+
+# ----------------------------------------
+# CLIENTES
+# ----------------------------------------
 
 @app.get(
     "/tenants/{tenant_id}/customers",
@@ -158,11 +180,57 @@ def create_customer(
         db.add(customer)
         db.commit()
         db.refresh(customer)
+
     except IntegrityError:
         db.rollback()
         raise HTTPException(
             status_code=409,
-            detail="Ya existe un cliente con ese identificador en la organización",
+            detail=(
+                "Ya existe un cliente con ese "
+                "identificador en la organización"
+            ),
         )
 
     return customer
+
+
+# ----------------------------------------
+# CONVERSACIONES
+# ----------------------------------------
+
+@app.post(
+    "/tenants/{tenant_id}/conversations",
+    response_model=ConversationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_conversation(
+    tenant_id: int,
+    conversation_data: ConversationCreate,
+    membership: Membership = Depends(require_tenant_membership),
+    db: Session = Depends(get_db),
+):
+    customer = db.scalar(
+        select(Customer).where(
+            Customer.id == conversation_data.customer_id,
+            Customer.tenant_id == membership.tenant_id,
+        )
+    )
+
+    if customer is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Cliente no encontrado en esta organización",
+        )
+
+    conversation = Conversation(
+        tenant_id=membership.tenant_id,
+        customer_id=customer.id,
+        channel=conversation_data.channel,
+    )
+
+    db.add(conversation)
+    db.commit()
+    db.refresh(conversation)
+
+    return conversation
+
