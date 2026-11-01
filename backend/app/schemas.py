@@ -63,3 +63,28 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+
+
+class ServiceMessageCreate(BaseModel):
+    cliente_id: str = Field(min_length=1, max_length=150)
+    mensaje: str = Field(min_length=1)
+
+class ServiceMessageResponse(BaseModel):
+    tenant_id: int
+    customer_id: int
+    conversation_id: int
+    message_id: int
+    status: str
+
+
+class ServiceOutboundMessageCreate(BaseModel):
+    conversation_id: int = Field(gt=0)
+    respuesta: str = Field(min_length=1)
+
+
+class ServiceOutboundMessageResponse(BaseModel):
+    tenant_id: int
+    conversation_id: int
+    message_id: int
+    direction: str
+    status: str

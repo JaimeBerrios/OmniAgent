@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from .database import engine, get_db
 from .models import Conversation, Customer, Membership, Message, Tenant, User
+from .service_security import require_service_key
 from .schemas import (
     ConversationCreate,
     ConversationResponse,
@@ -14,6 +15,10 @@ from .schemas import (
     TokenResponse,
     MessageCreate,
     MessageResponse,
+    ServiceMessageCreate,
+    ServiceMessageResponse,
+    ServiceOutboundMessageCreate,
+    ServiceOutboundMessageResponse,
 )
 from .security import (
     create_access_token,
@@ -21,7 +26,6 @@ from .security import (
     require_tenant_membership,
     verify_password,
 )
-
 
 app = FastAPI(
     title="OmniAgent API",
@@ -311,3 +315,110 @@ def list_conversation_messages(
     ).all()
 
     return messages
+
+
+@app.post(
+    "/internal/messages/inbound",
+    response_model=ServiceMessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def receive_internal_message(
+    message_data: ServiceMessageCreate,
+    tenant_id: int = Depends(require_service_key),
+    db: Session = Depends(get_db),
+):
+    customer = db.scalar(
+        select(Customer).where(
+            Customer.tenant_id == tenant_id,
+            Customer.external_id == message_data.cliente_id,
+        )
+    )
+
+    if customer is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Cliente no encontrado en la organización autorizada",
+        )
+
+    conversation = db.scalar(
+        select(Conversation)
+        .where(
+            Conversation.tenant_id == tenant_id,
+            Conversation.customer_id == customer.id,
+            Conversation.channel == "whatsapp",
+            Conversation.status == "open",
+        )
+        .order_by(Conversation.id.desc())
+        .limit(1)
+    )
+
+    if conversation is None:
+        conversation = Conversation(
+            tenant_id=tenant_id,
+            customer_id=customer.id,
+            channel="whatsapp",
+        )
+        db.add(conversation)
+        db.flush()
+
+    message = Message(
+        tenant_id=tenant_id,
+        conversation_id=conversation.id,
+        direction="inbound",
+        content=message_data.mensaje,
+    )
+
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+
+    return ServiceMessageResponse(
+        tenant_id=tenant_id,
+        customer_id=customer.id,
+        conversation_id=conversation.id,
+        message_id=message.id,
+        status="received",
+    )
+
+
+@app.post(
+    "/internal/messages/outbound",
+    response_model=ServiceOutboundMessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def receive_outbound_message(
+    message_data: ServiceOutboundMessageCreate,
+    tenant_id: int = Depends(require_service_key),
+    db: Session = Depends(get_db),
+):
+    conversation = db.scalar(
+        select(Conversation).where(
+            Conversation.id == message_data.conversation_id,
+            Conversation.tenant_id == tenant_id,
+        )
+    )
+
+    if conversation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversación no encontrada en la organización autorizada",
+        )
+
+    message = Message(
+        tenant_id=tenant_id,
+        conversation_id=conversation.id,
+        direction="outbound",
+        content=message_data.respuesta,
+    )
+
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+
+    return ServiceOutboundMessageResponse(
+        tenant_id=tenant_id,
+        conversation_id=conversation.id,
+        message_id=message.id,
+        direction="outbound",
+        status="recorded",
+    )
