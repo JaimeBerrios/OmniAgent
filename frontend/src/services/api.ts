@@ -21,6 +21,7 @@ export const api = {
  profile:()=>request<Profile>('/auth/me'),
  tenant:(id:number)=>request<Tenant>(`/tenants/${id}/me`),
  customers:(id:number)=>request<Customer[]>(`/tenants/${id}/customers`),
+ conversations:(id:number)=>request<Conversation[]>(`/tenants/${id}/conversations`),
  createCustomer:(id:number,data:{name:string|null;external_id:string})=>post<Customer>(`/tenants/${id}/customers`,data),
  createConversation:(id:number,data:{customer_id:number;channel:string})=>post<Conversation>(`/tenants/${id}/conversations`,data),
  messages:(id:number,conversation:number)=>request<Message[]>(`/tenants/${id}/conversations/${conversation}/messages`),

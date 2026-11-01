@@ -9,6 +9,7 @@ from .service_security import require_service_key
 from .schemas import (
     ConversationCreate,
     ConversationResponse,
+    ConversationListResponse,
     CustomerCreate,
     CustomerResponse,
     LoginRequest,
@@ -202,6 +203,55 @@ def create_customer(
 # ----------------------------------------
 # CONVERSACIONES
 # ----------------------------------------
+@app.get(
+    "/tenants/{tenant_id}/conversations",
+    response_model=list[ConversationListResponse],
+)
+def list_conversations(
+    tenant_id: int,
+    membership: Membership = Depends(require_tenant_membership),
+    db: Session = Depends(get_db),
+):
+    conversations = db.execute(
+        select(Conversation, Customer)
+        .join(
+            Customer,
+            (Customer.id == Conversation.customer_id)
+            & (Customer.tenant_id == Conversation.tenant_id),
+        )
+        .where(Conversation.tenant_id == membership.tenant_id)
+        .order_by(Conversation.created_at.desc(), Conversation.id.desc())
+    ).all()
+
+    result = []
+
+    for conversation, customer in conversations:
+        last_message = db.scalar(
+            select(Message)
+            .where(
+                Message.tenant_id == membership.tenant_id,
+                Message.conversation_id == conversation.id,
+            )
+            .order_by(Message.created_at.desc(), Message.id.desc())
+            .limit(1)
+        )
+
+        result.append(
+            ConversationListResponse(
+                id=conversation.id,
+                tenant_id=conversation.tenant_id,
+                customer_id=conversation.customer_id,
+                channel=conversation.channel,
+                status=conversation.status,
+                created_at=conversation.created_at,
+                customer_name=customer.name,
+                customer_external_id=customer.external_id,
+                last_message=last_message.content if last_message else None,
+                last_message_at=last_message.created_at if last_message else None,
+            )
+        )
+
+    return result
 
 @app.post(
     "/tenants/{tenant_id}/conversations",

@@ -88,3 +88,9 @@ class ServiceOutboundMessageResponse(BaseModel):
     message_id: int
     direction: str
     status: str
+
+class ConversationListResponse(ConversationResponse):
+    customer_name: str | None = None
+    customer_external_id: str
+    last_message: str | None = None
+    last_message_at: datetime | None = None
