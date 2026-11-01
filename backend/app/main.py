@@ -1,11 +1,10 @@
-
 from fastapi import Depends, FastAPI, HTTPException, status
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from .database import engine, get_db
-from .models import Conversation, Customer, Membership, Tenant, User
+from .models import Conversation, Customer, Membership, Message, Tenant, User
 from .schemas import (
     ConversationCreate,
     ConversationResponse,
@@ -13,6 +12,8 @@ from .schemas import (
     CustomerResponse,
     LoginRequest,
     TokenResponse,
+    MessageCreate,
+    MessageResponse,
 )
 from .security import (
     create_access_token,
@@ -234,3 +235,79 @@ def create_conversation(
 
     return conversation
 
+
+# ----------------------------------------
+# MENSAJES
+# ----------------------------------------
+
+@app.post(
+    "/tenants/{tenant_id}/messages",
+    response_model=MessageResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_message(
+    tenant_id: int,
+    message_data: MessageCreate,
+    membership: Membership = Depends(require_tenant_membership),
+    db: Session = Depends(get_db),
+):
+    conversation = db.scalar(
+        select(Conversation).where(
+            Conversation.id == message_data.conversation_id,
+            Conversation.tenant_id == membership.tenant_id,
+        )
+    )
+
+    if conversation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversación no encontrada en esta organización",
+        )
+
+    message = Message(
+        tenant_id=membership.tenant_id,
+        conversation_id=conversation.id,
+        direction=message_data.direction,
+        content=message_data.content,
+    )
+
+    db.add(message)
+    db.commit()
+    db.refresh(message)
+
+    return message
+
+
+@app.get(
+    "/tenants/{tenant_id}/conversations/{conversation_id}/messages",
+    response_model=list[MessageResponse],
+)
+def list_conversation_messages(
+    tenant_id: int,
+    conversation_id: int,
+    membership: Membership = Depends(require_tenant_membership),
+    db: Session = Depends(get_db),
+):
+    conversation = db.scalar(
+        select(Conversation).where(
+            Conversation.id == conversation_id,
+            Conversation.tenant_id == membership.tenant_id,
+        )
+    )
+
+    if conversation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversación no encontrada en esta organización",
+        )
+
+    messages = db.scalars(
+        select(Message)
+        .where(
+            Message.tenant_id == membership.tenant_id,
+            Message.conversation_id == conversation.id,
+        )
+        .order_by(Message.created_at, Message.id)
+    ).all()
+
+    return messages
