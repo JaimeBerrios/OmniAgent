@@ -1,5 +1,5 @@
 from fastapi import Depends, FastAPI, HTTPException, status
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -64,6 +64,62 @@ def health():
             detail="Base de datos no disponible",
         )
 
+
+
+
+# ----------------------------------------
+# ESTADÍSTICAS DEL DASHBOARD
+# ----------------------------------------
+
+@app.get("/tenants/{tenant_id}/stats")
+def get_tenant_stats(
+    tenant_id: int,
+    membership: Membership = Depends(require_tenant_membership),
+    db: Session = Depends(get_db),
+):
+    tenant = membership.tenant_id
+
+    customers = db.scalar(
+        select(func.count(Customer.id))
+        .where(Customer.tenant_id == tenant)
+    )
+
+    conversations = db.scalar(
+        select(func.count(Conversation.id))
+        .where(Conversation.tenant_id == tenant)
+    )
+
+    open_conversations = db.scalar(
+        select(func.count(Conversation.id))
+        .where(
+            Conversation.tenant_id == tenant,
+            Conversation.status == "open",
+        )
+    )
+
+    inbound_messages = db.scalar(
+        select(func.count(Message.id))
+        .where(
+            Message.tenant_id == tenant,
+            Message.direction == "inbound",
+        )
+    )
+
+    outbound_messages = db.scalar(
+        select(func.count(Message.id))
+        .where(
+            Message.tenant_id == tenant,
+            Message.direction == "outbound",
+        )
+    )
+
+    return {
+        "customers": customers,
+        "conversations": conversations,
+        "open_conversations": open_conversations,
+        "inbound_messages": inbound_messages,
+        "outbound_messages": outbound_messages,
+    }
 
 # ----------------------------------------
 # AUTENTICACIÓN

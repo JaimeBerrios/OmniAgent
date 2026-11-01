@@ -14,3 +14,12 @@ export interface Conversation {
 export interface Message { id: number; tenant_id: number; conversation_id: number; direction: 'inbound' | 'outbound'; content: string; created_at: string }
 export interface Profile { id: number; email: string; is_active: boolean }
 export interface Tenant { tenant_id: number; organization: string; role: string }
+
+
+export interface DashboardStats {
+  customers: number
+  conversations: number
+  open_conversations: number
+  inbound_messages: number
+  outbound_messages: number
+}
