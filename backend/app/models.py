@@ -1,4 +1,3 @@
-
 from datetime import datetime
 
 from sqlalchemy import (
@@ -110,4 +109,52 @@ class Message(Base):
             "conversation_id",
             "created_at",
         ),
+    )
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(
+        BigInteger, Identity(always=True), primary_key=True
+    )
+    email: Mapped[str] = mapped_column(
+        String(255), nullable=False, unique=True
+    )
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(
+        nullable=False, server_default="true"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+
+class Membership(Base):
+    __tablename__ = "memberships"
+
+    id: Mapped[int] = mapped_column(
+        BigInteger, Identity(always=True), primary_key=True
+    )
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id"), nullable=False
+    )
+    tenant_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("tenants.id"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="agent"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "tenant_id"),
+        CheckConstraint("role IN ('owner', 'admin', 'agent')"),
+        Index("idx_memberships_tenant", "tenant_id"),
     )
