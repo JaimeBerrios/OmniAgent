@@ -23,3 +23,10 @@ export interface DashboardStats {
   inbound_messages: number
   outbound_messages: number
 }
+
+
+export interface DailyActivity {
+  date: string
+  inbound: number
+  outbound: number
+}

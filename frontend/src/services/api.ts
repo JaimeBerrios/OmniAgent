@@ -1,4 +1,4 @@
-import type { Customer, Conversation, DashboardStats, Message, Profile, Tenant } from '../types'
+import type { Customer, Conversation, DashboardStats, DailyActivity, Message, Profile, Tenant } from '../types'
 let token = ''
 export const setToken = (value: string) => { token = value }
 export class ApiError extends Error { constructor(public status: number, message: string) { super(message) } }
@@ -22,6 +22,7 @@ export const api = {
  tenant:(id:number)=>request<Tenant>(`/tenants/${id}/me`),
  customers:(id:number)=>request<Customer[]>(`/tenants/${id}/customers`),
  stats:(id:number)=>request<DashboardStats>(`/tenants/${id}/stats`),
+ activity:(id:number)=>request<DailyActivity[]>(`/tenants/${id}/stats/activity`),
  conversations:(id:number)=>request<Conversation[]>(`/tenants/${id}/conversations`),
  createCustomer:(id:number,data:{name:string|null;external_id:string})=>post<Customer>(`/tenants/${id}/customers`,data),
  createConversation:(id:number,data:{customer_id:number;channel:string})=>post<Conversation>(`/tenants/${id}/conversations`,data),

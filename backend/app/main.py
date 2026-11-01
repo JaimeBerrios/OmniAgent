@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import Depends, FastAPI, HTTPException, status
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
@@ -120,6 +122,55 @@ def get_tenant_stats(
         "inbound_messages": inbound_messages,
         "outbound_messages": outbound_messages,
     }
+
+
+@app.get("/tenants/{tenant_id}/stats/activity")
+def get_tenant_activity(
+    tenant_id: int,
+    membership: Membership = Depends(require_tenant_membership),
+    db: Session = Depends(get_db),
+):
+    today = datetime.now(timezone.utc).date()
+    start_date = today - timedelta(days=6)
+    start = datetime.combine(
+        start_date,
+        datetime.min.time(),
+        tzinfo=timezone.utc,
+    )
+
+    rows = db.execute(
+        select(
+            func.date(Message.created_at).label("day"),
+            Message.direction,
+            func.count(Message.id),
+        )
+        .where(
+            Message.tenant_id == membership.tenant_id,
+            Message.created_at >= start,
+        )
+        .group_by(
+            func.date(Message.created_at),
+            Message.direction,
+        )
+    ).all()
+
+    activity = {
+        (str(day), direction): count
+        for day, direction, count in rows
+    }
+
+    return [
+        {
+            "date": day.isoformat(),
+            "inbound": activity.get((day.isoformat(), "inbound"), 0),
+            "outbound": activity.get((day.isoformat(), "outbound"), 0),
+        }
+        for day in (
+            start_date + timedelta(days=offset)
+            for offset in range(7)
+        )
+    ]
+
 
 # ----------------------------------------
 # AUTENTICACIÓN
