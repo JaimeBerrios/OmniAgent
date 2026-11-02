@@ -10,8 +10,6 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from .database import get_db
-from .models import User
-
 from .models import Membership, User
 
 password_hash = PasswordHash.recommended()

@@ -158,3 +158,41 @@ class Membership(Base):
         CheckConstraint("role IN ('owner', 'admin', 'agent')"),
         Index("idx_memberships_tenant", "tenant_id"),
     )
+
+
+class AutomationAudit(Base):
+    __tablename__ = "automation_audit"
+
+    id: Mapped[int] = mapped_column(
+        BigInteger, Identity(always=True), primary_key=True
+    )
+    tenant_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("tenants.id"), nullable=False
+    )
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id"), nullable=False
+    )
+    workflow_id: Mapped[str] = mapped_column(
+        String(100), nullable=False
+    )
+    action: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )
+    status: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    __table_args__ = (
+        CheckConstraint("action IN ('activate', 'deactivate')"),
+        CheckConstraint("status IN ('pending', 'success', 'failed')"),
+        Index(
+            "idx_automation_audit_tenant",
+            "tenant_id",
+            "created_at",
+        ),
+    )

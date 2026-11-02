@@ -51,6 +51,7 @@ services:
       N8N_API_KEY: ${N8N_API_KEY:?N8N_API_KEY no configurada}
       N8N_TENANT_ID: ${N8N_TENANT_ID:?N8N_TENANT_ID no configurado}
       N8N_ADMIN_API_KEY: ${N8N_ADMIN_API_KEY:?N8N_ADMIN_API_KEY no configurada}
+      N8N_CONTROL_API_KEY: ${N8N_CONTROL_API_KEY:?N8N_CONTROL_API_KEY no configurada}
       N8N_BASE_URL: http://n8n:5678
       N8N_WORKFLOW_ID: ${N8N_WORKFLOW_ID:?N8N_WORKFLOW_ID no configurado}
       N8N_WORKFLOW_TENANT_ID: ${N8N_WORKFLOW_TENANT_ID:?N8N_WORKFLOW_TENANT_ID no configurado}

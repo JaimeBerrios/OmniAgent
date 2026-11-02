@@ -39,6 +39,11 @@ export const api = {
  profile:()=>request<Profile>('/auth/me'),
  tenant:(id:number)=>request<Tenant>(`/tenants/${id}/me`),
  automationsStatus:(id:number)=>request<AutomationStatus>(`/tenants/${id}/automations/status`),
+ controlAutomation:(id:number,action:'activate'|'deactivate')=>
+  request<{
+   workflow:{id:string;name:string;active:boolean}
+   action:'activate'|'deactivate'
+  }>(`/tenants/${id}/automations/${action}`,{method:'POST'}),
 
  customers:(id:number)=>request<Customer[]>(`/tenants/${id}/customers`),
  stats:(id:number)=>request<DashboardStats>(`/tenants/${id}/stats`),

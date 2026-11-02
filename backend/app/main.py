@@ -5,8 +5,8 @@ from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from .database import engine, get_db
-from .models import Conversation, Customer, Membership, Message, Tenant, User
+from .database import SessionLocal, engine, get_db
+from .models import AutomationAudit, Conversation, Customer, Membership, Message, Tenant, User
 from .service_security import require_service_key
 from .schemas import (
     ConversationCreate,
@@ -687,3 +687,174 @@ def get_automation_status(
             for record in records
         ],
     }
+
+
+def acquire_automation_lock(connection, tenant_id: int) -> bool:
+    return bool(
+        connection.execute(
+            text("SELECT pg_try_advisory_lock(:namespace, :tenant_id)"),
+            {"namespace": 48001, "tenant_id": tenant_id},
+        ).scalar_one()
+    )
+
+
+def release_automation_lock(connection, tenant_id: int) -> None:
+    released = connection.execute(
+        text("SELECT pg_advisory_unlock(:namespace, :tenant_id)"),
+        {"namespace": 48001, "tenant_id": tenant_id},
+    ).scalar_one()
+
+    if not released:
+        raise RuntimeError("No se pudo confirmar la liberación del bloqueo")
+
+
+@app.post("/tenants/{tenant_id}/automations/{action}")
+def control_automation(
+    tenant_id: int,
+    action: str,
+    membership: Membership = Depends(require_tenant_membership),
+):
+    import logging
+    import os
+
+    from app.n8n_client import N8NClientError, n8n_control_workflow, verify_workflow_action
+
+    if membership.role not in ("owner", "admin"):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para administrar automatizaciones",
+        )
+
+    configured_tenant = int(os.environ["N8N_WORKFLOW_TENANT_ID"])
+
+    if tenant_id != configured_tenant or membership.tenant_id != configured_tenant:
+        raise HTTPException(
+            status_code=404,
+            detail="Automatización no disponible para esta organización",
+        )
+
+    if action not in ("activate", "deactivate"):
+        raise HTTPException(status_code=400, detail="Acción no permitida")
+
+    workflow_id = os.environ["N8N_WORKFLOW_ID"]
+
+    with engine.connect() as lock_connection:
+        if not acquire_automation_lock(lock_connection, tenant_id):
+            raise HTTPException(
+                status_code=409,
+                detail="Otra operación administrativa está en curso",
+            )
+
+        try:
+            with SessionLocal() as audit_db:
+                pending_audit = audit_db.scalar(
+                    select(AutomationAudit.id)
+                    .where(
+                        AutomationAudit.tenant_id == tenant_id,
+                        AutomationAudit.workflow_id == workflow_id,
+                        AutomationAudit.status == "pending",
+                    )
+                    .limit(1)
+                )
+
+                if pending_audit is not None:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Existe una operación pendiente de revisión",
+                    )
+
+            try:
+                with SessionLocal() as audit_db:
+                    audit = AutomationAudit(
+                        tenant_id=tenant_id,
+                        user_id=membership.user_id,
+                        workflow_id=workflow_id,
+                        action=action,
+                        status="pending",
+                    )
+                    audit_db.add(audit)
+                    audit_db.commit()
+                    audit_id = audit.id
+            except SQLAlchemyError:
+                logging.getLogger(__name__).exception(
+                    "No fue posible iniciar la auditoría"
+                )
+                raise HTTPException(
+                    status_code=503,
+                    detail="No fue posible registrar la solicitud",
+                )
+
+            workflow = None
+            operation_error = None
+
+            try:
+                workflow = n8n_control_workflow(workflow_id, action)
+                verification = verify_workflow_action(workflow_id, action)
+
+                if (
+                    workflow.get("active") is (action == "activate")
+                    and verification["matches_expected"]
+                ):
+                    result = "success"
+                else:
+                    result = "pending"
+
+            except N8NClientError as exc:
+                logging.getLogger(__name__).warning(
+                    "Error de control n8n: tenant=%s workflow=%s action=%s audit=%s error=%s",
+                    tenant_id,
+                    workflow_id,
+                    action,
+                    audit_id,
+                    exc,
+                )
+                operation_error = exc
+                result = "pending"
+
+            try:
+                with SessionLocal() as audit_db:
+                    audit = audit_db.get(AutomationAudit, audit_id)
+                    if audit is None:
+                        raise RuntimeError("Registro de auditoría inexistente")
+                    audit.status = result
+                    audit_db.commit()
+            except (SQLAlchemyError, RuntimeError):
+                logging.getLogger(__name__).exception(
+                    "No fue posible finalizar la auditoría %s", audit_id
+                )
+                raise HTTPException(
+                    status_code=503,
+                    detail="Estado de operación no confirmado; verifica n8n",
+                )
+
+            if operation_error is not None:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Resultado no confirmado; consulta el estado de n8n antes de reintentar",
+                )
+
+            if result == "pending":
+                raise HTTPException(
+                    status_code=409,
+                    detail="El estado del workflow no pudo confirmarse; requiere revisión",
+                )
+
+            return {
+                "workflow": {
+                    "id": workflow.get("id"),
+                    "name": workflow.get("name"),
+                    "active": workflow.get("active"),
+                },
+                "action": action,
+            }
+
+        finally:
+            try:
+                release_automation_lock(lock_connection, tenant_id)
+            except Exception:
+                lock_connection.invalidate()
+                logging.getLogger(__name__).exception(
+                    "Error al liberar el bloqueo del tenant %s",
+                    tenant_id,
+                )
+                raise

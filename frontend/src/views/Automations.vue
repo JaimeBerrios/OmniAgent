@@ -6,6 +6,39 @@ const session = useSession();
 const telemetry = ref<AutomationStatus | null>(null);
 const loading = ref(false);
 const error = ref('');
+const controlling = ref(false);
+const controlMessage = ref('');
+
+const controlWorkflow = async (action: 'activate' | 'deactivate') => {
+  if (!canView() || !session.tenant || !telemetry.value || controlling.value) return;
+
+  const expectedActive = action === 'activate';
+  if (telemetry.value.workflow.active === expectedActive) return;
+
+  const verb = expectedActive ? 'activar' : 'desactivar';
+
+  if (!window.confirm(`¿Confirmas que deseas ${verb} esta automatización?`)) return;
+
+  controlling.value = true;
+  controlMessage.value = '';
+
+  try {
+    await api.controlAutomation(session.tenant.tenant_id, action);
+    controlMessage.value = 'Operación confirmada por el servidor.';
+  } catch (err) {
+    controlMessage.value = err instanceof Error
+      ? err.message
+      : 'No se pudo confirmar la operación.';
+  } finally {
+    try {
+      telemetry.value = await api.automationsStatus(session.tenant.tenant_id);
+    } catch {
+      controlMessage.value += ' No fue posible actualizar el estado; consulta n8n antes de reintentar.';
+      telemetry.value = null;
+    }
+    controlling.value = false;
+  }
+};
 
 const canView = () =>
   session.mode === 'live' &&
@@ -61,7 +94,7 @@ La telemetría está disponible únicamente para administradores.
 {{ error }}
 </Notice>
 <Notice v-else>
-Estado operativo consultado desde n8n mediante la API autenticada de OmniAgent. Esta vista es de solo lectura.
+Estado operativo consultado desde n8n mediante la API autenticada de OmniAgent. Los administradores autorizados pueden gestionar el estado del workflow.
 </Notice><section class="automation-hero card"><div class="automation-hero-icon"><Workflow :size="32"/></div><div><span class="eyebrow">WORKFLOW · N8N</span><h2>Recepción de mensajes</h2><p>Del primer contacto al registro de la respuesta, con contexto de organización.</p></div><span class="status pending" v-if="loading">Consultando...</span>
 <span class="status pending" v-else-if="telemetry">
 {{ telemetry.workflow.active ? 'Activo' : 'Inactivo' }}
@@ -70,6 +103,29 @@ Estado operativo consultado desde n8n mediante la API autenticada de OmniAgent. 
 <p><strong>Workflow:</strong> {{ telemetry.workflow.name }}</p>
 <p><strong>Estado:</strong> {{ telemetry.workflow.active ? 'Activo' : 'Inactivo' }}</p>
 <p><strong>Ejecuciones consultadas:</strong> {{ telemetry.executions.length }}</p>
+<div v-if="canView() && telemetry && !telemetry.workflow.archived"
+     style="display:flex;gap:12px;flex-wrap:wrap;margin:20px 0">
+  <button
+    class="button primary"
+    type="button"
+    :disabled="controlling || telemetry.workflow.active"
+    @click="controlWorkflow('activate')">
+    {{ controlling ? 'Procesando...' : 'Activar automatización' }}
+  </button>
+
+  <button
+    class="button"
+    type="button"
+    :disabled="controlling || !telemetry.workflow.active"
+    @click="controlWorkflow('deactivate')">
+    {{ controlling ? 'Procesando...' : 'Desactivar automatización' }}
+  </button>
+</div>
+
+<Notice v-if="controlMessage">
+  {{ controlMessage }}
+</Notice>
+
 <h3>Ejecuciones recientes</h3>
 <div v-if="!telemetry.executions.length" class="empty">
 No hay ejecuciones registradas.
@@ -103,4 +159,4 @@ No hay ejecuciones registradas.
 <Workflow :size="28"/>
 <h3>{{ loading ? 'Consultando n8n...' : 'Sin telemetría disponible' }}</h3>
 <p>{{ error || 'No hay datos operativos disponibles para esta sesión.' }}</p>
-</div></section><section class="card padded"><button class="disclosure" :aria-expanded="expanded" @click="expanded=!expanded"><h2>Acerca de esta automatización</h2><ChevronDown :size="18"/></button><div v-if="expanded"><dl><dt>Origen</dt><dd>Workflow de recepción del repositorio</dd><dt>Procesamiento</dt><dd>Normalización y selección de respuesta</dd><dt>Persistencia</dt><dd>Mensajes entrantes y salientes</dd><dt>Administración</dt><dd>Consulta autenticada de solo lectura mediante FastAPI</dd></dl><Notice>Las credenciales y los endpoints de servicio permanecen fuera del navegador.</Notice></div></section></div></template>
+</div></section><section class="card padded"><button class="disclosure" :aria-expanded="expanded" @click="expanded=!expanded"><h2>Acerca de esta automatización</h2><ChevronDown :size="18"/></button><div v-if="expanded"><dl><dt>Origen</dt><dd>Workflow de recepción del repositorio</dd><dt>Procesamiento</dt><dd>Normalización y selección de respuesta</dd><dt>Persistencia</dt><dd>Mensajes entrantes y salientes</dd><dt>Administración</dt><dd>Administración autenticada mediante FastAPI con auditoría</dd></dl><Notice>Las credenciales y los endpoints de servicio permanecen fuera del navegador.</Notice></div></section></div></template>
