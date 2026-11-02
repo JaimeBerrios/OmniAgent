@@ -10,6 +10,7 @@ from .models import Conversation, Customer, Membership, Message, Tenant, User
 from .service_security import require_service_key
 from .schemas import (
     ConversationCreate,
+    ConversationStatusUpdate,
     ConversationResponse,
     ConversationListResponse,
     CustomerCreate,
@@ -391,6 +392,37 @@ def create_conversation(
     )
 
     db.add(conversation)
+    db.commit()
+    db.refresh(conversation)
+
+    return conversation
+
+
+@app.patch(
+    "/tenants/{tenant_id}/conversations/{conversation_id}",
+    response_model=ConversationResponse,
+)
+def update_conversation_status(
+    tenant_id: int,
+    conversation_id: int,
+    data: ConversationStatusUpdate,
+    membership: Membership = Depends(require_tenant_membership),
+    db: Session = Depends(get_db),
+):
+    conversation = db.scalar(
+        select(Conversation).where(
+            Conversation.id == conversation_id,
+            Conversation.tenant_id == membership.tenant_id,
+        )
+    )
+
+    if conversation is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Conversación no encontrada en esta organización",
+        )
+
+    conversation.status = data.status
     db.commit()
     db.refresh(conversation)
 

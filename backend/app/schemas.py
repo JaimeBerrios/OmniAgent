@@ -1,3 +1,4 @@
+from typing import Literal
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -30,6 +31,10 @@ class CustomerResponse(CustomerCreate):
 class ConversationCreate(BaseModel):
     customer_id: int = Field(gt=0)
     channel: str = Field(min_length=1, max_length=30)
+
+
+class ConversationStatusUpdate(BaseModel):
+    status: Literal["open", "closed"]
 
 
 class ConversationResponse(ConversationCreate):

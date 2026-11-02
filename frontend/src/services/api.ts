@@ -27,5 +27,11 @@ export const api = {
  conversations:(id:number)=>request<Conversation[]>(`/tenants/${id}/conversations`),
  createCustomer:(id:number,data:{name:string|null;external_id:string})=>post<Customer>(`/tenants/${id}/customers`,data),
  createConversation:(id:number,data:{customer_id:number;channel:string})=>post<Conversation>(`/tenants/${id}/conversations`,data),
+ updateConversationStatus:(id:number,conversationId:number,status:'open'|'closed')=>
+  request<Conversation>(
+   `/tenants/${id}/conversations/${conversationId}`,
+   {method:'PATCH',body:JSON.stringify({status})}
+  ),
  messages:(id:number,conversation:number)=>request<Message[]>(`/tenants/${id}/conversations/${conversation}/messages`),
+ sendMessage:(id:number,data:{conversation_id:number;direction:'outbound';content:string})=>post<Message>(`/tenants/${id}/messages`,data),
 }
