@@ -629,3 +629,61 @@ def receive_outbound_message(
         direction="outbound",
         status="recorded",
     )
+
+
+@app.get("/tenants/{tenant_id}/automations/status")
+def get_automation_status(
+    tenant_id: int,
+    membership: Membership = Depends(require_tenant_membership),
+):
+    import os
+
+    from app.n8n_client import N8NClientError, n8n_get
+
+    if membership.role not in ("owner", "admin"):
+        raise HTTPException(
+            status_code=403,
+            detail="No tienes permisos para consultar automatizaciones",
+        )
+
+    configured_tenant = int(os.environ["N8N_WORKFLOW_TENANT_ID"])
+
+    if membership.tenant_id != configured_tenant:
+        raise HTTPException(
+            status_code=404,
+            detail="Automatización no disponible para esta organización",
+        )
+
+    workflow_id = os.environ["N8N_WORKFLOW_ID"]
+
+    try:
+        workflow = n8n_get(f"workflows/{workflow_id}")
+        executions = n8n_get(
+            "executions",
+            {"workflowId": workflow_id, "limit": 20},
+        )
+    except N8NClientError:
+        raise HTTPException(
+            status_code=502,
+            detail="No fue posible consultar el estado de n8n",
+        )
+
+    records = executions.get("data", [])
+
+    return {
+        "workflow": {
+            "id": workflow.get("id"),
+            "name": workflow.get("name"),
+            "active": workflow.get("active"),
+            "archived": workflow.get("isArchived"),
+        },
+        "executions": [
+            {
+                "id": record.get("id"),
+                "status": record.get("status"),
+                "started_at": record.get("startedAt"),
+                "stopped_at": record.get("stoppedAt"),
+            }
+            for record in records
+        ],
+    }

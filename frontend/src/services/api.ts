@@ -1,4 +1,22 @@
 import type { Customer, Conversation, DashboardStats, DailyActivity, Message, Profile, Tenant } from '../types'
+
+export interface AutomationExecution {
+  id: string
+  status: string | null
+  started_at: string | null
+  stopped_at: string | null
+}
+
+export interface AutomationStatus {
+  workflow: {
+    id: string
+    name: string
+    active: boolean
+    archived: boolean
+  }
+  executions: AutomationExecution[]
+}
+
 let token = ''
 export const setToken = (value: string) => { token = value }
 export class ApiError extends Error { constructor(public status: number, message: string) { super(message) } }
@@ -20,6 +38,8 @@ export const api = {
  login:(email:string,password:string)=>post<{access_token:string;token_type:string}>('/auth/login',{email,password}),
  profile:()=>request<Profile>('/auth/me'),
  tenant:(id:number)=>request<Tenant>(`/tenants/${id}/me`),
+ automationsStatus:(id:number)=>request<AutomationStatus>(`/tenants/${id}/automations/status`),
+
  customers:(id:number)=>request<Customer[]>(`/tenants/${id}/customers`),
  stats:(id:number)=>request<DashboardStats>(`/tenants/${id}/stats`),
  activity:(id:number)=>request<DailyActivity[]>(`/tenants/${id}/stats/activity`),
