@@ -439,6 +439,24 @@ def create_message(
     return message
 
 
+
+@app.get(
+    "/tenants/{tenant_id}/messages/recent",
+    response_model=list[MessageResponse],
+)
+def list_recent_messages(
+    tenant_id: int,
+    membership: Membership = Depends(require_tenant_membership),
+    db: Session = Depends(get_db),
+):
+    return db.scalars(
+        select(Message)
+        .where(Message.tenant_id == membership.tenant_id)
+        .order_by(Message.created_at.desc(), Message.id.desc())
+        .limit(10)
+    ).all()
+
+
 @app.get(
     "/tenants/{tenant_id}/conversations/{conversation_id}/messages",
     response_model=list[MessageResponse],

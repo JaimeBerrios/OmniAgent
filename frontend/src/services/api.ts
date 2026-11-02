@@ -23,6 +23,7 @@ export const api = {
  customers:(id:number)=>request<Customer[]>(`/tenants/${id}/customers`),
  stats:(id:number)=>request<DashboardStats>(`/tenants/${id}/stats`),
  activity:(id:number)=>request<DailyActivity[]>(`/tenants/${id}/stats/activity`),
+ recentMessages:(id:number)=>request<Message[]>(`/tenants/${id}/messages/recent`),
  conversations:(id:number)=>request<Conversation[]>(`/tenants/${id}/conversations`),
  createCustomer:(id:number,data:{name:string|null;external_id:string})=>post<Customer>(`/tenants/${id}/customers`,data),
  createConversation:(id:number,data:{customer_id:number;channel:string})=>post<Conversation>(`/tenants/${id}/conversations`,data),
