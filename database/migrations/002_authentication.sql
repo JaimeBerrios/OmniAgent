@@ -1,6 +1,3 @@
-
-BEGIN;
-
 CREATE TABLE users (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     email VARCHAR(255) NOT NULL,
@@ -28,5 +25,3 @@ CREATE TABLE memberships (
 
 CREATE INDEX idx_memberships_tenant
     ON memberships(tenant_id);
-
-COMMIT;

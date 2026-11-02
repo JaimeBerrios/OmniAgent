@@ -1,5 +1,3 @@
-BEGIN;
-
 CREATE TABLE automation_audit (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL REFERENCES tenants(id),
@@ -18,5 +16,3 @@ CREATE TABLE automation_audit (
 
 CREATE INDEX idx_automation_audit_tenant
     ON automation_audit(tenant_id, created_at);
-
-COMMIT;

@@ -1,4 +1,3 @@
-
 name: omniagent
 
 services:
@@ -6,15 +5,18 @@ services:
     image: postgres:17-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER requerido}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD requerido}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB requerido}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - internal
+    mem_limit: 192m
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
       interval: 10s
       timeout: 5s
       retries: 5
@@ -22,51 +24,66 @@ services:
   n8n:
     image: docker.n8n.io/n8nio/n8n:stable
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:5678:5678"
     environment:
-      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY}
-      N8N_API_KEY: ${N8N_API_KEY:?N8N_API_KEY no configurada}
-      N8N_HOST: localhost
+      N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY requerido}
+      N8N_API_KEY: ${N8N_API_KEY:?N8N_API_KEY requerido}
+      N8N_HOST: n8n.omniagent.jaimeberrios.com
       N8N_PORT: 5678
-      N8N_PROTOCOL: http
-      N8N_SECURE_COOKIE: "false"
+      N8N_PROTOCOL: https
+      N8N_EDITOR_BASE_URL: https://n8n.omniagent.jaimeberrios.com/
+      WEBHOOK_URL: https://n8n.omniagent.jaimeberrios.com/
+      N8N_SECURE_COOKIE: "true"
+      N8N_PROXY_HOPS: 1
       GENERIC_TIMEZONE: America/El_Salvador
       TZ: America/El_Salvador
     volumes:
       - n8n_data:/home/node/.n8n
     networks:
-      - internal
+      - web_network
+    mem_limit: 256m
 
   api:
     build:
-      context: ../backend
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: backend/Dockerfile
     restart: unless-stopped
-    ports:
-      - "127.0.0.1:8000:8000"
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
-      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY no configurada}
-      N8N_API_KEY: ${N8N_API_KEY:?N8N_API_KEY no configurada}
-      N8N_TENANT_ID: ${N8N_TENANT_ID:?N8N_TENANT_ID no configurado}
-      N8N_ADMIN_API_KEY: ${N8N_ADMIN_API_KEY:?N8N_ADMIN_API_KEY no configurada}
-      N8N_CONTROL_API_KEY: ${N8N_CONTROL_API_KEY:?N8N_CONTROL_API_KEY no configurada}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY requerido}
+      N8N_API_KEY: ${N8N_API_KEY:?N8N_API_KEY requerido}
+      N8N_TENANT_ID: ${N8N_TENANT_ID:?N8N_TENANT_ID requerido}
+      N8N_ADMIN_API_KEY: ${N8N_ADMIN_API_KEY:?N8N_ADMIN_API_KEY requerido}
+      N8N_CONTROL_API_KEY: ${N8N_CONTROL_API_KEY:?N8N_CONTROL_API_KEY requerido}
       N8N_BASE_URL: http://n8n:5678
-      N8N_WORKFLOW_ID: ${N8N_WORKFLOW_ID:?N8N_WORKFLOW_ID no configurado}
-      N8N_WORKFLOW_TENANT_ID: ${N8N_WORKFLOW_TENANT_ID:?N8N_WORKFLOW_TENANT_ID no configurado}
+      N8N_WORKFLOW_ID: ${N8N_WORKFLOW_ID:?N8N_WORKFLOW_ID requerido}
+      N8N_WORKFLOW_TENANT_ID: ${N8N_WORKFLOW_TENANT_ID:?N8N_WORKFLOW_TENANT_ID requerido}
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - internal
+      - web_network
+    mem_limit: 128m
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: /api
+    restart: unless-stopped
+    networks:
+      - web_network
+    mem_limit: 48m
 
 networks:
   internal:
     driver: bridge
-    ipam:
-      config:
-        - subnet: 172.30.50.0/24
+    internal: true
+
+  web_network:
+    external: true
+    name: web_network
 
 volumes:
   postgres_data:

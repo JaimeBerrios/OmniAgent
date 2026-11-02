@@ -1,6 +1,3 @@
-
-BEGIN;
-
 CREATE TABLE tenants (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(150) NOT NULL,
@@ -50,5 +47,3 @@ CREATE INDEX idx_conversations_customer
 
 CREATE INDEX idx_messages_conversation
     ON messages(tenant_id, conversation_id, created_at);
-
-COMMIT;

@@ -26,3 +26,4 @@ Thumbs.db
 database/data/
 automation/data/
 *.sqlite3
+infrastructure/compose.yaml.backup
