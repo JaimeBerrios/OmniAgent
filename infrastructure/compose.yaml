@@ -25,6 +25,7 @@ services:
     image: docker.n8n.io/n8nio/n8n:stable
     restart: unless-stopped
     environment:
+      NODE_OPTIONS: "--max-old-space-size=768"
       N8N_ENCRYPTION_KEY: ${N8N_ENCRYPTION_KEY:?N8N_ENCRYPTION_KEY requerido}
       N8N_API_KEY: ${N8N_API_KEY:?N8N_API_KEY requerido}
       N8N_HOST: n8n.omniagent.jaimeberrios.com
@@ -40,7 +41,7 @@ services:
       - n8n_data:/home/node/.n8n
     networks:
       - web_network
-    mem_limit: 256m
+    mem_limit: 1g
 
   api:
     build:
@@ -48,7 +49,14 @@ services:
       dockerfile: backend/Dockerfile
     restart: unless-stopped
     environment:
+      MESSENGER_PAGE_ACCESS_TOKEN: ${MESSENGER_PAGE_ACCESS_TOKEN:?Token requerido}
+      MESSENGER_VERIFY_TOKEN: ${MESSENGER_VERIFY_TOKEN:?Token requerido}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      META_VERIFY_TOKEN: ${META_VERIFY_TOKEN:?META_VERIFY_TOKEN requerido}
+      META_APP_SECRET: ${META_APP_SECRET:?META_APP_SECRET requerido}
+      META_ACCESS_TOKEN: ${META_ACCESS_TOKEN:?META_ACCESS_TOKEN requerido}
+      WHATSAPP_TENANT_ID: ${WHATSAPP_TENANT_ID:?WHATSAPP_TENANT_ID requerido}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:?WHATSAPP_PHONE_NUMBER_ID requerido}
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?JWT_SECRET_KEY requerido}
       N8N_API_KEY: ${N8N_API_KEY:?N8N_API_KEY requerido}
       N8N_TENANT_ID: ${N8N_TENANT_ID:?N8N_TENANT_ID requerido}
@@ -63,6 +71,82 @@ services:
     networks:
       - internal
       - web_network
+    mem_limit: 128m
+
+
+  whatsapp-worker:
+    image: omniagent-whatsapp-worker:local
+    pull_policy: never
+    entrypoint: ["python", "-m", "app.whatsapp_worker"]
+    command: ["python", "-m", "app.whatsapp_worker"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      WHATSAPP_TENANT_ID: ${WHATSAPP_TENANT_ID:?WHATSAPP_TENANT_ID requerido}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:?WHATSAPP_PHONE_NUMBER_ID requerido}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_started
+      n8n:
+        condition: service_started
+    networks:
+      - internal
+      - web_network
+    mem_limit: 128m
+
+
+
+  messenger-worker:
+    image: omniagent-api:whatsapp
+    pull_policy: never
+    entrypoint: ["python", "-m", "app.messenger_worker"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      MESSENGER_PAGE_ACCESS_TOKEN: ${MESSENGER_PAGE_ACCESS_TOKEN:?Token de Messenger requerido}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+      - web_network
+    mem_limit: 128m
+
+
+  messenger-outbound-worker:
+    image: omniagent-api:whatsapp
+    pull_policy: never
+    entrypoint: ["python", "-m", "app.messenger_outbound_worker"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      MESSENGER_PAGE_ACCESS_TOKEN: ${MESSENGER_PAGE_ACCESS_TOKEN:?Token de Messenger requerido}
+      MESSENGER_OUTBOUND_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
+      - web_network
+    mem_limit: 128m
+
+  whatsapp-outbound-worker:
+    image: omniagent-api:whatsapp-outbound
+    pull_policy: never
+    entrypoint: ["python", "-m", "app.whatsapp_outbound_worker"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      WHATSAPP_TENANT_ID: ${WHATSAPP_TENANT_ID:?WHATSAPP_TENANT_ID requerido}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:?WHATSAPP_PHONE_NUMBER_ID requerido}
+      WHATSAPP_OUTBOUND_ENABLED: "false"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal
     mem_limit: 128m
 
   frontend:

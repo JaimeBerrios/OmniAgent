@@ -1,0 +1,7 @@
+FROM omniagent-api:latest
+
+WORKDIR /app
+
+COPY backend/app/ ./app/
+
+ENTRYPOINT ["/app/entrypoint.sh"]

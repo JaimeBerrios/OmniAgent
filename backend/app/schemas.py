@@ -34,7 +34,7 @@ class ConversationCreate(BaseModel):
 
 
 class ConversationStatusUpdate(BaseModel):
-    status: Literal["open", "closed"]
+    status: Literal["open", "closed", "archived"]
 
 
 class ConversationResponse(ConversationCreate):
@@ -56,6 +56,7 @@ class MessageResponse(MessageCreate):
     id: int
     tenant_id: int
     created_at: datetime
+    delivery_status: str | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -73,6 +74,9 @@ class TokenResponse(BaseModel):
 class ServiceMessageCreate(BaseModel):
     cliente_id: str = Field(min_length=1, max_length=150)
     mensaje: str = Field(min_length=1)
+    meta_message_id: str | None = Field(
+        default=None, min_length=1, max_length=255
+    )
 
 class ServiceMessageResponse(BaseModel):
     tenant_id: int
@@ -85,6 +89,7 @@ class ServiceMessageResponse(BaseModel):
 class ServiceOutboundMessageCreate(BaseModel):
     conversation_id: int = Field(gt=0)
     respuesta: str = Field(min_length=1)
+    inbound_message_id: int | None = Field(default=None, gt=0)
 
 
 class ServiceOutboundMessageResponse(BaseModel):
