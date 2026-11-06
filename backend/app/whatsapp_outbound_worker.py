@@ -65,6 +65,7 @@ def claim_delivery():
         if delivery is None:
             return None
 
+        delivery.updated_at = datetime.now(timezone.utc)
         delivery.status = "sending"
         delivery.attempts += 1
         delivery.claim_token = uuid.uuid4()
@@ -89,7 +90,7 @@ def recover_interrupted_deliveries():
             .where(
                 WhatsAppOutboundDelivery.tenant_id == TENANT_ID,
                 WhatsAppOutboundDelivery.status == "sending",
-                WhatsAppOutboundDelivery.updated_at < cutoff,
+                WhatsAppOutboundDelivery.claimed_at < cutoff,
             )
             .values(
                 status="unknown",
@@ -154,6 +155,7 @@ def finish_delivery(
         if delivery is None:
             return False
 
+        delivery.updated_at = datetime.now(timezone.utc)
         delivery.status = outcome
         delivery.meta_message_id = meta_message_id
         delivery.last_error = error
@@ -298,6 +300,7 @@ def processing_cycle(sender):
 
 
 def main():
+    logger.info("version=%s", os.environ.get("APP_VERSION", "dev"))
     logger.info("Trabajador de WhatsApp saliente iniciado")
 
     if not OUTBOUND_ENABLED:
@@ -305,7 +308,8 @@ def main():
             "Envíos reales desactivados. "
             "WHATSAPP_OUTBOUND_ENABLED=false"
         )
-        return
+        while True:
+            time.sleep(60)
 
     from app.whatsapp_sender import send_whatsapp_message
 

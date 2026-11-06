@@ -63,6 +63,9 @@ async def receive_webhook(request: Request):
     except (ValueError, UnicodeDecodeError):
         raise HTTPException(400, "JSON inválido")
 
+    from .webhook_validation import validate_envelope
+    validate_envelope(payload)
+
     if not isinstance(payload, dict):
         raise HTTPException(400, "Payload inválido")
 

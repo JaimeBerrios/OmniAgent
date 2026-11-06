@@ -44,11 +44,13 @@ services:
     mem_limit: 1g
 
   api:
+    image: omniagent-backend:${APP_VERSION:-dev}
     build:
       context: ..
       dockerfile: backend/Dockerfile
     restart: unless-stopped
     environment:
+      APP_VERSION: ${APP_VERSION:-dev}
       MESSENGER_PAGE_ACCESS_TOKEN: ${MESSENGER_PAGE_ACCESS_TOKEN:?Token requerido}
       MESSENGER_VERIFY_TOKEN: ${MESSENGER_VERIFY_TOKEN:?Token requerido}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
@@ -75,12 +77,15 @@ services:
 
 
   whatsapp-worker:
-    image: omniagent-whatsapp-worker:local
+    image: omniagent-backend:${APP_VERSION:-dev}
     pull_policy: never
     entrypoint: ["python", "-m", "app.whatsapp_worker"]
     command: ["python", "-m", "app.whatsapp_worker"]
     restart: unless-stopped
     environment:
+      APP_VERSION: ${APP_VERSION:-dev}
+      N8N_WEBHOOK_KEY: ${N8N_WEBHOOK_KEY:?Webhook key requerido}
+      N8N_WEBHOOK_URL: http://n8n:5678/webhook/omniagent-mensajes
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       WHATSAPP_TENANT_ID: ${WHATSAPP_TENANT_ID:?WHATSAPP_TENANT_ID requerido}
       WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:?WHATSAPP_PHONE_NUMBER_ID requerido}
@@ -99,11 +104,12 @@ services:
 
 
   messenger-worker:
-    image: omniagent-api:whatsapp
+    image: omniagent-backend:${APP_VERSION:-dev}
     pull_policy: never
     entrypoint: ["python", "-m", "app.messenger_worker"]
     restart: unless-stopped
     environment:
+      APP_VERSION: ${APP_VERSION:-dev}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       MESSENGER_PAGE_ACCESS_TOKEN: ${MESSENGER_PAGE_ACCESS_TOKEN:?Token de Messenger requerido}
     depends_on:
@@ -116,14 +122,15 @@ services:
 
 
   messenger-outbound-worker:
-    image: omniagent-api:whatsapp
+    image: omniagent-backend:${APP_VERSION:-dev}
     pull_policy: never
     entrypoint: ["python", "-m", "app.messenger_outbound_worker"]
-    restart: "no"
+    restart: unless-stopped
     environment:
+      APP_VERSION: ${APP_VERSION:-dev}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       MESSENGER_PAGE_ACCESS_TOKEN: ${MESSENGER_PAGE_ACCESS_TOKEN:?Token de Messenger requerido}
-      MESSENGER_OUTBOUND_ENABLED: "false"
+      MESSENGER_OUTBOUND_ENABLED: ${MESSENGER_OUTBOUND_ENABLED:-false}
     depends_on:
       postgres:
         condition: service_healthy
@@ -133,20 +140,23 @@ services:
     mem_limit: 128m
 
   whatsapp-outbound-worker:
-    image: omniagent-api:whatsapp-outbound
+    image: omniagent-backend:${APP_VERSION:-dev}
     pull_policy: never
     entrypoint: ["python", "-m", "app.whatsapp_outbound_worker"]
-    restart: "no"
+    restart: unless-stopped
     environment:
+      APP_VERSION: ${APP_VERSION:-dev}
+      META_ACCESS_TOKEN: ${META_ACCESS_TOKEN:?META_ACCESS_TOKEN requerido}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       WHATSAPP_TENANT_ID: ${WHATSAPP_TENANT_ID:?WHATSAPP_TENANT_ID requerido}
       WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:?WHATSAPP_PHONE_NUMBER_ID requerido}
-      WHATSAPP_OUTBOUND_ENABLED: "false"
+      WHATSAPP_OUTBOUND_ENABLED: ${WHATSAPP_OUTBOUND_ENABLED:-false}
     depends_on:
       postgres:
         condition: service_healthy
     networks:
       - internal
+      - web_network
     mem_limit: 128m
 
   frontend:

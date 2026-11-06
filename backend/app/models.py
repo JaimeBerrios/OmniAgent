@@ -66,6 +66,9 @@ class Conversation(Base):
         BigInteger, ForeignKey("tenants.id"), nullable=False
     )
     customer_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    assigned_user_id: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"))
+    last_read_message_id: Mapped[int | None] = mapped_column(BigInteger)
+    automation_enabled: Mapped[bool] = mapped_column(server_default="true", nullable=False)
     channel: Mapped[str] = mapped_column(String(30), nullable=False)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default="open"
@@ -80,6 +83,7 @@ class Conversation(Base):
             ["tenant_id", "customer_id"],
             ["customers.tenant_id", "customers.id"],
         ),
+        ForeignKeyConstraint(["assigned_user_id", "tenant_id"], ["memberships.user_id", "memberships.tenant_id"], name="fk_conversation_assignee_membership"),
         CheckConstraint("status IN ('open', 'closed', 'archived')"),
         Index("idx_conversations_customer", "tenant_id", "customer_id"),
     )
@@ -98,6 +102,7 @@ class Message(Base):
     direction: Mapped[str] = mapped_column(String(10), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     meta_message_id: Mapped[str | None] = mapped_column(String(255))
+    idempotency_key: Mapped[str | None] = mapped_column(String(100))
     inbound_message_id: Mapped[int | None] = mapped_column(BigInteger)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -108,6 +113,7 @@ class Message(Base):
             ["tenant_id", "conversation_id"],
             ["conversations.tenant_id", "conversations.id"],
         ),
+        UniqueConstraint("tenant_id", "conversation_id", "idempotency_key", name="uq_message_request"),
         CheckConstraint("direction IN ('inbound', 'outbound')"),
         UniqueConstraint("tenant_id", "id", name="uq_messages_tenant_id"),
         ForeignKeyConstraint(
@@ -429,3 +435,51 @@ class MessengerPage(Base):
             name="uq_messenger_page_tenant",
         ),
     )
+
+
+class WebsiteSite(Base):
+    __tablename__ = "website_sites"
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("tenants.id"), nullable=False)
+    public_id: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(150), nullable=False)
+    origin: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_active: Mapped[bool] = mapped_column(server_default="true", nullable=False)
+    __table_args__ = (UniqueConstraint("tenant_id", "id"),)
+
+
+class VisitorSession(Base):
+    __tablename__ = "visitor_sessions"
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    site_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    conversation_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id", "site_id"], ["website_sites.tenant_id", "website_sites.id"]),
+        ForeignKeyConstraint(["tenant_id", "conversation_id"], ["conversations.tenant_id", "conversations.id"]),
+    )
+
+
+class ConversationEvent(Base):
+    __tablename__ = 'conversation_events'
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    conversation_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    actor_id: Mapped[int] = mapped_column(BigInteger, ForeignKey('users.id'), nullable=False)
+    kind: Mapped[str] = mapped_column(String(30), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    __table_args__ = (ForeignKeyConstraint(['tenant_id', 'conversation_id'], ['conversations.tenant_id', 'conversations.id']),)
+
+
+class AdminEvent(Base):
+    __tablename__ = 'admin_events'
+    id: Mapped[int] = mapped_column(BigInteger, Identity(always=True), primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey('tenants.id'), nullable=False)
+    actor_id: Mapped[int] = mapped_column(BigInteger, ForeignKey('users.id'), nullable=False)
+    action: Mapped[str] = mapped_column(String(50), nullable=False)
+    target: Mapped[str] = mapped_column(String(150), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

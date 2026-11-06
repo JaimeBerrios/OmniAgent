@@ -23,6 +23,7 @@ if (current === generation) {
   activity.value = activityResult;
   recentMessages.value = recentResult;
 }}}catch(e){if(current===generation)error.value=(e as Error).message}finally{if(current===generation)loading.value=false}}
+ async function refreshConversations(query=''){const s=useSession(),current=generation;if(s.mode!=='live'||!s.tenant)return;const result=await api.conversations(s.tenant.tenant_id,query);if(current===generation)conversations.value=result}
  async function addCustomer(name:string,external_id:string){const s=useSession(),current=generation; if(customers.value.some(c=>c.external_id===external_id))throw new Error('Ya existe un cliente con ese identificador.');const c=s.mode==='demo'?{id:Math.max(0,...customers.value.map(c=>c.id))+1,tenant_id:0,name:name||null,external_id,created_at:new Date().toISOString()}:await api.createCustomer(s.tenant!.tenant_id,{name:name||null,external_id});if(current===generation)customers.value.push(c)}
  async function createConversation(customer_id:number,channel:string){const s=useSession(),current=generation;const c=s.mode==='demo'?{id:Math.max(0,...conversations.value.map(c=>c.id))+1,tenant_id:0,customer_id,channel,status:'open',created_at:new Date().toISOString()}:await api.createConversation(s.tenant!.tenant_id,{customer_id,channel});if(current===generation)conversations.value.unshift(c);return c}
  async function loadMessages(id:number){const s=useSession(),current=generation;if(s.mode==='demo')return;const result=await api.messages(s.tenant!.tenant_id,id);if(current===generation)messages.value=[...messages.value.filter(m=>m.conversation_id!==id),...result]}
@@ -43,20 +44,21 @@ if (current === generation) {
 
   return updated;
  }
- async function registerReply(id:number,content:string){
+ async function registerReply(id:number,content:string,idempotency_key:string){
   const s=useSession(),current=generation;
   if(s.mode!=='live'||!s.tenant)throw new Error('Se requiere una sesión real.');
   const message=await api.sendMessage(s.tenant.tenant_id,{
     conversation_id:id,
     direction:'outbound',
-    content
+    content,
+    idempotency_key
   });
   if(current===generation){
-    messages.value.push(message);
+    if(!messages.value.some(m=>m.id===message.id))messages.value.push(message);
     recentMessages.value=[message,...recentMessages.value].slice(0,10);
   }
   return message;
  }
  function reply(id:number,content:string){if(useSession().mode!=='demo')return;messages.value.push({id:Date.now(),tenant_id:0,conversation_id:id,direction:'outbound',content,created_at:new Date().toISOString()})}
- return {customers,conversations,messages,recentMessages,stats,activity,loading,error,reset,load,addCustomer,createConversation,loadMessages,changeConversationStatus,registerReply,reply}
+ return {customers,conversations,messages,recentMessages,stats,activity,loading,error,reset,load,addCustomer,createConversation,loadMessages,changeConversationStatus,registerReply,reply,refreshConversations}
 })

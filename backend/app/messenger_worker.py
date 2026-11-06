@@ -261,6 +261,7 @@ def fail_event(event, error):
 
 
 def main():
+    logger.info("version=%s", os.environ.get("APP_VERSION", "dev"))
     logger.info("Worker de Facebook Messenger iniciado")
 
     while True:

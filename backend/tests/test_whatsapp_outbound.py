@@ -5,7 +5,7 @@ def test_outbound_delivery_table():
     table = WhatsAppOutboundDelivery.__table__
 
     assert table.name == "whatsapp_outbound_deliveries"
-    assert len(table.columns) == 10
+    assert {"claim_token", "claimed_at"}.issubset(table.columns.keys())
 
 
 def test_outbound_delivery_required_columns():

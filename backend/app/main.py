@@ -3,7 +3,7 @@ from .legal import router as legal_router
 from .whatsapp_webhook import router as whatsapp_router
 from datetime import datetime, timedelta, timezone
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, status, Query, Request
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -45,6 +45,15 @@ for whatsapp_route in whatsapp_router.routes:
     app.router.routes.append(whatsapp_route)
 
 
+from .widget import router as widget_router
+from .operations import router as operations_router
+from .message_service import enqueue_reply
+from .rate_limit import consume
+from .http_safety import BodyLimitMiddleware, WidgetCORSMiddleware
+app.add_middleware(BodyLimitMiddleware)
+app.add_middleware(WidgetCORSMiddleware)
+app.include_router(widget_router)
+app.include_router(operations_router)
 app.include_router(legal_router)
 for messenger_route in messenger_router.routes:
     app.router.routes.append(messenger_route)
@@ -59,6 +68,7 @@ def root():
     return {
         "application": "OmniAgent",
         "status": "running",
+        "version": __import__("os").environ.get("APP_VERSION", "dev"),
     }
 
 
@@ -195,8 +205,10 @@ def get_tenant_activity(
 )
 def login(
     credentials: LoginRequest,
+    request: Request,
     db: Session = Depends(get_db),
 ):
+    consume(db, "login:" + (request.client.host if request.client else "unknown"), 10)
     email = credentials.email.strip().lower()
 
     user = db.scalar(
@@ -267,13 +279,17 @@ def get_tenant_profile(
 )
 def list_customers(
     tenant_id: int,
+    after_id: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
+    q: str = Query("", max_length=150),
     membership: Membership = Depends(require_tenant_membership),
     db: Session = Depends(get_db),
 ):
     customers = db.scalars(
         select(Customer)
         .where(Customer.tenant_id == membership.tenant_id)
-        .order_by(Customer.id)
+        .where(Customer.id > after_id, (Customer.name.ilike(f"%{q}%") | Customer.external_id.ilike(f"%{q}%")))
+        .order_by(Customer.id).limit(limit)
     ).all()
 
     return customers
@@ -329,52 +345,38 @@ def create_customer(
 )
 def list_conversations(
     tenant_id: int,
+    limit: int = Query(100, ge=1, le=500),
+    before_id: int | None = Query(None, gt=0),
+    q: str = Query("", max_length=150),
+    channel: str | None = Query(None, max_length=30),
+    status: str | None = Query(None, pattern="^(open|closed|archived)$"),
+    assigned_to_me: bool = False,
     membership: Membership = Depends(require_tenant_membership),
     db: Session = Depends(get_db),
 ):
-    conversations = db.execute(
-        select(Conversation, Customer)
-        .join(
-            Customer,
-            (Customer.id == Conversation.customer_id)
-            & (Customer.tenant_id == Conversation.tenant_id),
-        )
-        .where(
-            Conversation.tenant_id == membership.tenant_id,
-            Conversation.status != "archived",
-        )
-        .order_by(Conversation.created_at.desc(), Conversation.id.desc())
-    ).all()
+    latest = select(Message.id).where(Message.tenant_id == Conversation.tenant_id,
+        Message.conversation_id == Conversation.id).order_by(Message.id.desc()).limit(1).correlate(Conversation).scalar_subquery()
+    statement = select(Conversation, Customer, Message).join(Customer,
+        (Customer.id == Conversation.customer_id) & (Customer.tenant_id == Conversation.tenant_id)
+    ).outerjoin(Message, Message.id == latest).where(Conversation.tenant_id == membership.tenant_id)
+    if before_id:
+        statement = statement.where(Conversation.id < before_id)
+    if channel:
+        statement = statement.where(Conversation.channel == channel)
+    statement = statement.where(Conversation.status == status) if status else statement.where(Conversation.status != "archived")
+    if assigned_to_me:
+        statement = statement.where(Conversation.assigned_user_id == membership.user_id)
+    if q:
+        statement = statement.where(Customer.name.ilike(f"%{q}%") | Customer.external_id.ilike(f"%{q}%"))
+    rows = db.execute(statement.order_by(Conversation.id.desc()).limit(limit)).all()
+    return [ConversationListResponse(
+        **ConversationResponse.model_validate(c).model_dump(),
+        customer_name=customer.name, customer_external_id=customer.external_id,
+        last_message=m.content if m else None, last_message_at=m.created_at if m else None,
+        pending_reply=bool(m and m.direction == "inbound" and c.status == "open"),
+        unread=bool(m and m.direction == "inbound" and m.id > (c.last_read_message_id or 0)),
+    ) for c, customer, m in rows]
 
-    result = []
-
-    for conversation, customer in conversations:
-        last_message = db.scalar(
-            select(Message)
-            .where(
-                Message.tenant_id == membership.tenant_id,
-                Message.conversation_id == conversation.id,
-            )
-            .order_by(Message.created_at.desc(), Message.id.desc())
-            .limit(1)
-        )
-
-        result.append(
-            ConversationListResponse(
-                id=conversation.id,
-                tenant_id=conversation.tenant_id,
-                customer_id=conversation.customer_id,
-                channel=conversation.channel,
-                status=conversation.status,
-                created_at=conversation.created_at,
-                customer_name=customer.name,
-                customer_external_id=customer.external_id,
-                last_message=last_message.content if last_message else None,
-                last_message_at=last_message.created_at if last_message else None,
-            )
-        )
-
-    return result
 
 @app.post(
     "/tenants/{tenant_id}/conversations",
@@ -438,6 +440,8 @@ def update_conversation_status(
         )
 
     conversation.status = data.status
+    from .operations import event
+    event(db, membership, conversation.id, "status", data.status)
     db.commit()
     db.refresh(conversation)
 
@@ -474,6 +478,7 @@ def create_message(
     membership: Membership = Depends(require_tenant_membership),
     db: Session = Depends(get_db),
 ):
+    consume(db, f"operator-send:{membership.tenant_id}:{membership.user_id}", 60)
     conversation = db.scalar(
         select(Conversation).where(
             Conversation.id == message_data.conversation_id,
@@ -487,96 +492,20 @@ def create_message(
             detail="Conversación no encontrada en esta organización",
         )
 
-    delivery_data = None
-
-    if conversation.channel == "messenger":
-        if message_data.direction != "outbound":
-            raise HTTPException(
-                status_code=422,
-                detail="Los mensajes entrantes de Messenger deben llegar por el webhook",
-            )
-
-        customer = db.scalar(
-            select(Customer).where(
-                Customer.id == conversation.customer_id,
-                Customer.tenant_id == membership.tenant_id,
-            )
-        )
-
-        if customer is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Cliente de Messenger no encontrado",
-            )
-
-        parts = customer.external_id.split(":", 2)
-
-        if (
-            len(parts) != 3
-            or parts[0] != "fb"
-            or not parts[1].isascii()
-            or not parts[1].isdigit()
-            or not parts[2].isascii()
-            or not parts[2].isdigit()
-        ):
-            raise HTTPException(
-                status_code=422,
-                detail="Identificador de Messenger inválido o simulado",
-            )
-
-        page_id, psid = parts[1], parts[2]
-
-        page = db.scalar(
-            select(MessengerPage).where(
-                MessengerPage.tenant_id == membership.tenant_id,
-                MessengerPage.page_id == page_id,
-                MessengerPage.is_active.is_(True),
-            )
-        )
-
-        if page is None:
-            raise HTTPException(
-                status_code=422,
-                detail="Página de Messenger no activa o no autorizada",
-            )
-
-        delivery_data = (page_id, psid)
-
-    message = Message(
-        tenant_id=membership.tenant_id,
-        conversation_id=conversation.id,
-        direction=message_data.direction,
-        content=message_data.content,
-    )
-
-    db.add(message)
-    db.flush()
-
-    if delivery_data is not None:
-        page_id, psid = delivery_data
-
-        db.add(
-            MessengerOutboundDelivery(
-                tenant_id=membership.tenant_id,
-                message_id=message.id,
-                page_id=page_id,
-                recipient_psid=psid,
-                status="pending",
-            )
-        )
-
+    if message_data.direction != "outbound":
+        raise HTTPException(422, "Los mensajes entrantes deben llegar por su canal")
+    message = enqueue_reply(db, conversation, message_data.content,
+                            idempotency_key=message_data.idempotency_key)
+    from .operations import event
+    event(db, membership, conversation.id, "reply", str(message.id))
     db.commit()
-    db.refresh(message)
-
     response = MessageResponse.model_validate(message)
-
-    if delivery_data is not None:
-        response.delivery_status = get_messenger_delivery_status(
-            db,
-            membership.tenant_id,
-            message.id,
-        )
-
+    model = {"messenger": MessengerOutboundDelivery, "whatsapp": WhatsAppOutboundDelivery}.get(conversation.channel)
+    if model:
+        response.delivery_status = db.scalar(select(model.status).where(
+            model.tenant_id == membership.tenant_id, model.message_id == message.id))
+    else:
+        response.delivery_status = "available"
     return response
 
 
@@ -604,6 +533,8 @@ def list_recent_messages(
 def list_conversation_messages(
     tenant_id: int,
     conversation_id: int,
+    after_id: int = Query(0, ge=0),
+    limit: int = Query(100, ge=1, le=500),
     membership: Membership = Depends(require_tenant_membership),
     db: Session = Depends(get_db),
 ):
@@ -625,11 +556,14 @@ def list_conversation_messages(
         .where(
             Message.tenant_id == membership.tenant_id,
             Message.conversation_id == conversation.id,
+            Message.id > after_id,
         )
-        .order_by(Message.created_at, Message.id)
+        .order_by(Message.id)
+        .limit(limit)
     ).all()
 
-    if conversation.channel != "messenger":
+    delivery_model = {"messenger": MessengerOutboundDelivery, "whatsapp": WhatsAppOutboundDelivery}.get(conversation.channel)
+    if delivery_model is None:
         return messages
 
     message_ids = [
@@ -643,11 +577,11 @@ def list_conversation_messages(
 
     deliveries = db.execute(
         select(
-            MessengerOutboundDelivery.message_id,
-            MessengerOutboundDelivery.status,
+            delivery_model.message_id,
+            delivery_model.status,
         ).where(
-            MessengerOutboundDelivery.tenant_id == membership.tenant_id,
-            MessengerOutboundDelivery.message_id.in_(message_ids),
+            delivery_model.tenant_id == membership.tenant_id,
+            delivery_model.message_id.in_(message_ids),
         )
     ).all()
 
@@ -728,6 +662,8 @@ def receive_internal_message(
             if customer is None:
                 raise
 
+    db.scalar(select(Customer).where(Customer.id == customer.id,
+        Customer.tenant_id == tenant_id).with_for_update())
     conversation = db.scalar(
         select(Conversation)
         .where(
@@ -829,6 +765,10 @@ def receive_outbound_message(
             detail="Conversación no encontrada en la organización autorizada",
         )
 
+    db.scalar(select(Conversation).where(Conversation.id == conversation.id,
+        Conversation.tenant_id == tenant_id).with_for_update().execution_options(populate_existing=True))
+    if not conversation.automation_enabled:
+        raise HTTPException(409, "Intervención humana activa")
     if message_data.inbound_message_id is not None:
         inbound = db.scalar(
             select(Message).where(
@@ -862,85 +802,10 @@ def receive_outbound_message(
                 status="duplicate",
             )
 
-    recipient = None
-
-    if conversation.channel == "whatsapp":
-        customer = db.scalar(
-            select(Customer).where(
-                Customer.id == conversation.customer_id,
-                Customer.tenant_id == tenant_id,
-            )
-        )
-
-        if customer is None:
-            raise HTTPException(
-                status_code=404,
-                detail="Cliente de WhatsApp no encontrado",
-            )
-
-        recipient = customer.external_id
-
-        if not (
-            recipient.isascii()
-            and recipient.isdigit()
-            and 8 <= len(recipient) <= 15
-        ):
-            raise HTTPException(
-                status_code=422,
-                detail="Destinatario de WhatsApp inválido",
-            )
-
-    message = Message(
-        tenant_id=tenant_id,
-        conversation_id=conversation.id,
-        direction="outbound",
-        content=message_data.respuesta,
-        inbound_message_id=message_data.inbound_message_id,
-    )
-
-    try:
-        with db.begin_nested():
-            db.add(message)
-            db.flush()
-
-            if recipient is not None:
-                db.add(
-                    WhatsAppOutboundDelivery(
-                        tenant_id=tenant_id,
-                        message_id=message.id,
-                        recipient_phone=recipient,
-                        status="pending",
-                    )
-                )
-                db.flush()
-
-    except IntegrityError:
-        if message_data.inbound_message_id is None:
-            db.rollback()
-            raise
-
-        existing = db.scalar(
-            select(Message).where(
-                Message.tenant_id == tenant_id,
-                Message.inbound_message_id == message_data.inbound_message_id,
-                Message.direction == "outbound",
-            )
-        )
-
-        if existing is None:
-            db.rollback()
-            raise
-
-        response = ServiceOutboundMessageResponse(
-            tenant_id=tenant_id,
-            conversation_id=existing.conversation_id,
-            message_id=existing.id,
-            direction="outbound",
-            status="duplicate",
-        )
-
-        db.rollback()
-        return response
+    if message_data.inbound_message_id is None:
+        raise HTTPException(422, "inbound_message_id es obligatorio para reintentos seguros")
+    message = enqueue_reply(db, conversation, message_data.respuesta,
+                            inbound_message_id=message_data.inbound_message_id)
 
     db.commit()
     db.refresh(message)

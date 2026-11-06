@@ -1,0 +1,62 @@
+# Archivos de esta intervención
+
+## Modificados
+
+- `.gitignore`
+- `README.md`
+- `automation/recepcion-mensajes.json`
+- `backend/app/main.py`
+- `backend/app/messenger_outbound_worker.py`
+- `backend/app/messenger_webhook.py`
+- `backend/app/messenger_worker.py`
+- `backend/app/models.py`
+- `backend/app/schemas.py`
+- `backend/app/service_security.py`
+- `backend/app/whatsapp_outbound_worker.py`
+- `backend/app/whatsapp_webhook.py`
+- `backend/app/whatsapp_worker.py`
+- `backend/scripts/entrypoint.sh`
+- `backend/scripts/migrate.py`
+- `backend/tests/test_whatsapp_outbound.py`
+- `frontend/nginx.conf`
+- `frontend/package-lock.json`
+- `frontend/package.json`
+- `frontend/src/components/Channel.vue`
+- `frontend/src/layouts/Shell.vue`
+- `frontend/src/services/api.ts`
+- `frontend/src/stores/session.ts`
+- `frontend/src/stores/workspace.ts`
+- `frontend/src/styles/main.css`
+- `frontend/src/types/index.ts`
+- `frontend/src/views/Conversations.vue`
+- `frontend/src/views/Customers.vue`
+- `frontend/src/views/Dashboard.vue`
+- `frontend/src/views/Login.vue`
+- `frontend/src/views/Settings.vue`
+- `frontend/vite.config.ts`
+- `infrastructure/compose.local.yaml`
+- `infrastructure/compose.yaml`
+
+## Creados
+
+- `backend/app/http_safety.py`
+- `backend/app/message_service.py`
+- `backend/app/operations.py`
+- `backend/app/rate_limit.py`
+- `backend/app/webhook_validation.py`
+- `backend/app/widget.py`
+- `backend/requirements-dev.txt`
+- `backend/scripts/seed_test_browser.py`
+- `backend/tests/conftest.py`
+- `backend/tests/test_platform.py`
+- `database/migrations/014_website_and_message_requests.sql`
+- `database/migrations/015_conversation_operations.sql`
+- `database/migrations/016_delivery_and_assignment_guards.sql`
+- `docs/CHANGED_FILES.md`
+- `docs/IMPLEMENTATION.md`
+- `docs/MOSFIX_WIDGET.md`
+- `frontend/playwright.config.ts`
+- `frontend/src/components/ConversationTools.vue`
+- `frontend/src/components/OrganizationAdmin.vue`
+- `frontend/tests/live.spec.ts`
+- `frontend/tests/workspace.spec.ts`

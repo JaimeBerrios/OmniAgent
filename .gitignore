@@ -27,3 +27,7 @@ database/data/
 automation/data/
 *.sqlite3
 infrastructure/compose.yaml.backup
+
+# Browser test artifacts
+frontend/test-results/
+frontend/playwright-report/

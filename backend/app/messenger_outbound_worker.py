@@ -321,6 +321,11 @@ def process_delivery(delivery):
         )
         return
 
+    except Exception:
+        logger.exception("Resultado incierto para entrega %s", delivery["id"])
+        finish_delivery(delivery["id"], delivery["token"], "unknown", error="Error inesperado durante el envío")
+        return
+
     finish_delivery(
         delivery["id"],
         delivery["token"],
@@ -332,26 +337,32 @@ def process_delivery(delivery):
 
 
 def main():
+    logger.info("version=%s", os.environ.get("APP_VERSION", "dev"))
     logger.info("Worker saliente de Messenger iniciado")
 
     while True:
         if not OUTBOUND_ENABLED:
             logger.info("Envío saliente desactivado")
-            return
+            time.sleep(60)
+            continue
 
-        recovered = recover_interrupted()
+        try:
+            recovered = recover_interrupted()
 
-        if recovered:
-            logger.warning(
-                "Entregas con resultado desconocido: %s",
-                recovered,
-            )
+            if recovered:
+                logger.warning(
+                    "Entregas con resultado desconocido: %s",
+                    recovered,
+                )
 
-        delivery = claim_delivery()
+            delivery = claim_delivery()
 
-        if delivery:
-            process_delivery(delivery)
-        else:
+            if delivery:
+                process_delivery(delivery)
+            else:
+                time.sleep(POLL_INTERVAL)
+        except Exception:
+            logger.exception("Error en el ciclo del worker saliente")
             time.sleep(POLL_INTERVAL)
 
 

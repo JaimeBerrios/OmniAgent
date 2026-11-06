@@ -6,7 +6,8 @@
         "httpMethod": "POST",
         "path": "omniagent-mensajes",
         "responseMode": "responseNode",
-        "options": {}
+        "options": {},
+        "authentication": "headerAuth"
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.2,
@@ -32,6 +33,12 @@
               "id": "12ab8b11-1b56-4148-9fad-a647e2b0ff17",
               "name": "cliente_id",
               "value": "={{ $json.body.cliente_id }}",
+              "type": "string"
+            },
+            {
+              "id": "omni-event-id",
+              "name": "meta_message_id",
+              "value": "={{ $json.body.meta_message_id }}",
               "type": "string"
             }
           ]
@@ -181,6 +188,10 @@
             {
               "name": "mensaje",
               "value": "={{ $('Edit Fields').item.json.mensaje }}"
+            },
+            {
+              "name": "meta_message_id",
+              "value": "={{ $('Edit Fields').item.json.meta_message_id }}"
             }
           ]
         },
@@ -217,6 +228,10 @@
             {
               "name": "respuesta",
               "value": "={{ $('Edit Fields1').item.json.respuesta }}"
+            },
+            {
+              "name": "inbound_message_id",
+              "value": "={{ $('HTTP Request').item.json.message_id }}"
             }
           ]
         },
@@ -253,6 +268,10 @@
             {
               "name": "respuesta",
               "value": "={{ $('Edit Fields2').item.json.respuesta }}"
+            },
+            {
+              "name": "inbound_message_id",
+              "value": "={{ $('HTTP Request').item.json.message_id }}"
             }
           ]
         },

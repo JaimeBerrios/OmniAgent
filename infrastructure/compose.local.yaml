@@ -1,11 +1,11 @@
 services:
   messenger-outbound-worker:
     environment:
-      MESSENGER_OUTBOUND_ENABLED: "true"
+      MESSENGER_OUTBOUND_ENABLED: "false"
   api:
     ports:
     - 127.0.0.1:8000:8000
-    image: omniagent-api:whatsapp
+    image: omniagent-backend:${APP_VERSION:-dev}
     pull_policy: never
   n8n:
     ports:

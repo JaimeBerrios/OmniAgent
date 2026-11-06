@@ -57,7 +57,7 @@ def forward_to_n8n(sender_phone, message, meta_message_id):
     request = urllib.request.Request(
         N8N_WEBHOOK_URL,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", "X-Webhook-Key": os.environ["N8N_WEBHOOK_KEY"]},
         method="POST",
     )
 
@@ -76,7 +76,10 @@ def process_message(db, message, phone_number_id):
 
     meta_message_id = message.get("id")
     sender_phone = message.get("from")
-    content = message.get("text", {}).get("body")
+    text_data = message.get("text", {})
+    if not isinstance(text_data, dict):
+        return "ignored"
+    content = text_data.get("body")
 
     if not all([
         isinstance(value, str) and value.strip()
@@ -154,7 +157,12 @@ async def receive_webhook(request: Request):
             detail="Firma inválida",
         )
 
-    payload = json.loads(body)
+    try:
+        payload = json.loads(body)
+    except (ValueError, UnicodeDecodeError):
+        raise HTTPException(400, "JSON inválido")
+    from .webhook_validation import validate_envelope
+    validate_envelope(payload)
 
     if payload.get("object") != "whatsapp_business_account":
         return {"status": "ignored"}

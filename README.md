@@ -24,4 +24,4 @@ Plataforma académica de atención omnicanal con automatización e inteligencia 
 
 ## Estado
 
-Proyecto en preparación.
+Implementación multicanal en validación local. Consultar [cambios, pruebas y límites](docs/IMPLEMENTATION.md) y el [contrato para conectar Mosfix](docs/MOSFIX_WIDGET.md). No se declara validación de producción.

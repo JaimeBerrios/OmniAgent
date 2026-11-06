@@ -24,8 +24,9 @@ for attempt in range(30):
         time.sleep(2)
 PY
 
-echo "===== EJECUTANDO MIGRACIONES ====="
-python /app/scripts/migrate.py
+if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
+    python /app/scripts/migrate.py
+fi
 
 echo "===== INICIANDO FASTAPI ====="
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000

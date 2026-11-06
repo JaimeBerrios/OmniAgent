@@ -14,7 +14,7 @@ from app.models import WhatsAppInboundEvent
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("omniagent.whatsapp_worker")
 
-N8N_URL = "http://n8n:5678/webhook/omniagent-mensajes"
+N8N_URL = os.environ.get("N8N_WEBHOOK_URL", "http://n8n:5678/webhook/omniagent-mensajes")
 TENANT_ID = int(os.environ["WHATSAPP_TENANT_ID"])
 PHONE_NUMBER_ID = os.environ["WHATSAPP_PHONE_NUMBER_ID"]
 
@@ -90,7 +90,7 @@ def send_to_n8n(event):
     request = urllib.request.Request(
         N8N_URL,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", "X-Webhook-Key": os.environ["N8N_WEBHOOK_KEY"]},
         method="POST",
     )
 
@@ -121,6 +121,7 @@ def finish_event(event, success):
             return
 
         current.processing_started_at = None
+        current.claim_token = None
 
         if success:
             current.status = "processed"
@@ -141,7 +142,7 @@ def finish_event(event, success):
 
 
 def main():
-    logger.info("Worker de WhatsApp iniciado")
+    logger.info("Worker de WhatsApp iniciado version=%s", os.environ.get("APP_VERSION", "dev"))
 
     while True:
         try:
