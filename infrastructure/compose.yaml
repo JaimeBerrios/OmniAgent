@@ -103,6 +103,27 @@ services:
 
 
 
+  website-worker:
+    image: omniagent-backend:${APP_VERSION:-dev}
+    pull_policy: never
+    profiles: [website]
+    entrypoint: ["python", "-m", "app.website_worker"]
+    restart: "no"
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      WEBSITE_WORKER_ENABLED: ${WEBSITE_WORKER_ENABLED:-false}
+      N8N_WEBHOOK_KEY: ${N8N_WEBHOOK_KEY:-}
+      N8N_WEBHOOK_URL: http://n8n:5678/webhook/omniagent-website
+    depends_on:
+      postgres:
+        condition: service_healthy
+      n8n:
+        condition: service_started
+      api:
+        condition: service_started
+    networks: [internal, web_network]
+    mem_limit: 128m
+
   messenger-worker:
     image: omniagent-backend:${APP_VERSION:-dev}
     pull_policy: never

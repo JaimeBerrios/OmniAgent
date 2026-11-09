@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, Query
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 from .database import get_db
 from .models import WebsiteSite, VisitorSession, Conversation, Customer, Message, Membership, AdminEvent
@@ -184,6 +184,14 @@ def post_message(conversation_id: int, data: VisitorMessage, session: VisitorSes
     message = Message(tenant_id=session.tenant_id, conversation_id=conversation_id, direction='inbound',
                       content=data.content, idempotency_key=key)
     db.add(message)
+    db.flush()
+    # Human intervention still permits receiving visitor messages, but never automation.
+    if conversation.automation_enabled:
+        db.execute(text("""
+            INSERT INTO website_inbound_events (tenant_id, site_id, conversation_id, message_id)
+            VALUES (:tenant, :site, :conversation, :message)
+        """), dict(tenant=session.tenant_id, site=session.site_id,
+                   conversation=conversation_id, message=message.id))
     db.commit()
     db.refresh(message)
     return message

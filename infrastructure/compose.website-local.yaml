@@ -1,0 +1,7 @@
+# Opt-in only. Validate the migration ledger and workflow before starting this service.
+# Combine with compose.yaml and compose.local.yaml; use --no-deps website-worker.
+services:
+  website-worker:
+    environment:
+      WEBSITE_WORKER_ENABLED: "true"
+    restart: "no"

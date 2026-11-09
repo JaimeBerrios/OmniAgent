@@ -8,6 +8,8 @@ services:
     image: omniagent-backend:${APP_VERSION:-dev}
     pull_policy: never
   n8n:
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     ports:
     - 127.0.0.1:5678:5678
     environment:

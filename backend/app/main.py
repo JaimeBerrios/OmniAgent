@@ -767,6 +767,19 @@ def receive_outbound_message(
 
     db.scalar(select(Conversation).where(Conversation.id == conversation.id,
         Conversation.tenant_id == tenant_id).with_for_update().execution_options(populate_existing=True))
+    if conversation.status != 'open':
+        raise HTTPException(409, "La conversación está cerrada")
+    if conversation.channel == 'website':
+        # The callback must belong to an event from a currently active registered site.
+        from sqlalchemy import text
+        if not db.scalar(text("""
+            SELECT e.id FROM website_inbound_events e
+            JOIN website_sites s ON s.id=e.site_id AND s.tenant_id=e.tenant_id
+            WHERE e.tenant_id=:tenant AND e.conversation_id=:conversation
+              AND e.message_id=:message AND s.is_active
+        """), dict(tenant=tenant_id, conversation=conversation.id,
+                   message=message_data.inbound_message_id)):
+            raise HTTPException(409, "Evento website no autorizado")
     if not conversation.automation_enabled:
         raise HTTPException(409, "Intervención humana activa")
     if message_data.inbound_message_id is not None:
