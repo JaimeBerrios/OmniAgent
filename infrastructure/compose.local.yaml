@@ -1,7 +1,7 @@
 services:
   messenger-outbound-worker:
     environment:
-      MESSENGER_OUTBOUND_ENABLED: "false"
+      MESSENGER_OUTBOUND_ENABLED: "true"
   api:
     ports:
     - 127.0.0.1:8000:8000

@@ -31,3 +31,13 @@ infrastructure/compose.yaml.backup
 # Browser test artifacts
 frontend/test-results/
 frontend/playwright-report/
+
+# Respaldos y archivos temporales locales
+/backups/
+/automation/backups/
+*.bak
+*.bak-*
+*.pre-*
+/omniagent-workflow-backup.json
+/omniagent-workflow-updated.json
+*.pre_*

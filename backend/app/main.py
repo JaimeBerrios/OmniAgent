@@ -669,7 +669,7 @@ def receive_internal_message(
         .where(
             Conversation.tenant_id == tenant_id,
             Conversation.customer_id == customer.id,
-            Conversation.channel == "whatsapp",
+            Conversation.channel == message_data.canal,
             Conversation.status == "open",
         )
         .order_by(Conversation.id.desc())
@@ -680,7 +680,7 @@ def receive_internal_message(
         conversation = Conversation(
             tenant_id=tenant_id,
             customer_id=customer.id,
-            channel="whatsapp",
+            channel=message_data.canal,
         )
         db.add(conversation)
         db.flush()

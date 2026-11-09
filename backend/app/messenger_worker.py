@@ -115,110 +115,39 @@ def process_event(event):
     if len(external_id) > 150:
         raise ValueError("Identificador de cliente demasiado largo")
 
-    profile_name = fetch_profile_name(psid)
+    webhook_url = os.environ.get("N8N_WEBHOOK_URL")
+    webhook_key = os.environ.get("N8N_WEBHOOK_KEY")
 
-    with SessionLocal.begin() as db:
-        current = db.execute(
-            text("""
-                SELECT id
-                FROM messenger_inbound_events
-                WHERE id = :id
-                  AND status = 'processing'
-                  AND claim_token = :token
-                FOR UPDATE
-            """),
-            {"id": event["id"], "token": event["claim_token"]},
-        ).first()
+    if not webhook_url or not webhook_key:
+        raise RuntimeError("Integración con n8n no configurada")
 
-        if current is None:
-            logger.warning("Evento %s ya no pertenece al worker", event["id"])
-            return
+    payload = {
+        "cliente_id": external_id,
+        "mensaje": event["message_body"],
+        "meta_message_id": event["meta_message_id"],
+        "canal": "messenger",
+        "tenant_id": tenant_id,
+        "page_id": page_id,
+    }
 
-        existing = db.execute(
-            text("""
-                SELECT id
-                FROM messages
-                WHERE tenant_id = :tenant_id
-                  AND meta_message_id = :mid
-                  AND direction = 'inbound'
-            """),
-            {"tenant_id": tenant_id, "mid": event["meta_message_id"]},
-        ).scalar_one_or_none()
+    request = urllib.request.Request(
+        webhook_url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "X-Webhook-Key": webhook_key,
+        },
+        method="POST",
+    )
 
-        if existing is None:
-            customer_id = db.execute(
-                text("""
-                    INSERT INTO customers (tenant_id, external_id)
-                    VALUES (:tenant_id, :external_id)
-                    ON CONFLICT (tenant_id, external_id)
-                    DO UPDATE SET external_id = EXCLUDED.external_id
-                    RETURNING id
-                """),
-                {"tenant_id": tenant_id, "external_id": external_id},
-            ).scalar_one()
-
-            if profile_name:
-                db.execute(
-                    text("""
-                        UPDATE customers
-                        SET name = :name
-                        WHERE tenant_id = :tenant_id
-                          AND id = :customer_id
-                          AND name IS NULL
-                    """),
-                    {
-                        "name": profile_name,
-                        "tenant_id": tenant_id,
-                        "customer_id": customer_id,
-                    },
-                )
-
-            conversation_id = db.execute(
-                text("""
-                    SELECT id
-                    FROM conversations
-                    WHERE tenant_id = :tenant_id
-                      AND customer_id = :customer_id
-                      AND channel = 'messenger'
-                      AND status = 'open'
-                    ORDER BY id DESC
-                    LIMIT 1
-                    FOR UPDATE
-                """),
-                {"tenant_id": tenant_id, "customer_id": customer_id},
-            ).scalar_one_or_none()
-
-            if conversation_id is None:
-                conversation_id = db.execute(
-                    text("""
-                        INSERT INTO conversations
-                            (tenant_id, customer_id, channel)
-                        VALUES
-                            (:tenant_id, :customer_id, 'messenger')
-                        RETURNING id
-                    """),
-                    {"tenant_id": tenant_id, "customer_id": customer_id},
-                ).scalar_one()
-
-            db.execute(
-                text("""
-                    INSERT INTO messages
-                        (tenant_id, conversation_id, direction,
-                         content, meta_message_id)
-                    VALUES
-                        (:tenant_id, :conversation_id, 'inbound',
-                         :content, :mid)
-                    ON CONFLICT DO NOTHING
-                """),
-                {
-                    "tenant_id": tenant_id,
-                    "conversation_id": conversation_id,
-                    "content": event["message_body"],
-                    "mid": event["meta_message_id"],
-                },
+    with urllib.request.urlopen(request, timeout=30) as response:
+        if response.status != 200:
+            raise RuntimeError(
+                f"n8n no confirmó el procesamiento: HTTP {response.status}"
             )
 
-        db.execute(
+    with SessionLocal.begin() as db:
+        result = db.execute(
             text("""
                 UPDATE messenger_inbound_events
                 SET status = 'processed',
@@ -228,10 +157,20 @@ def process_event(event):
                     claim_token = NULL,
                     last_error = NULL
                 WHERE id = :id
+                  AND status = 'processing'
                   AND claim_token = :token
             """),
-            {"id": event["id"], "token": event["claim_token"]},
+            {
+                "id": event["id"],
+                "token": event["claim_token"],
+            },
         )
+
+        if result.rowcount != 1:
+            logger.warning(
+                "Evento %s perdió su reserva de procesamiento",
+                event["id"],
+            )
 
 
 def fail_event(event, error):

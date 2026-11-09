@@ -5,7 +5,31 @@ from pathlib import Path
 
 import psycopg
 
-MIGRATIONS_DIR = Path(os.environ.get("MIGRATIONS_DIR", str(Path(__file__).resolve().parents[2] / "database" / "migrations")))
+def resolve_migrations_dir():
+    configured = os.environ.get("MIGRATIONS_DIR")
+
+    if configured:
+        directory = Path(configured).resolve()
+        if not directory.is_dir():
+            raise RuntimeError(f"MIGRATIONS_DIR no existe: {directory}")
+        return directory
+
+    script = Path(__file__).resolve()
+
+    candidates = [
+        script.parents[2] / "database" / "migrations",
+        script.parents[1] / "database" / "migrations",
+        script.parent / "migrations",
+    ]
+
+    for directory in candidates:
+        if directory.is_dir() and any(directory.glob("*.sql")):
+            return directory
+
+    raise RuntimeError("No se encontró el directorio de migraciones")
+
+
+MIGRATIONS_DIR = resolve_migrations_dir()
 
 DATABASE_URL = os.environ["DATABASE_URL"].replace(
     "postgresql+psycopg://",

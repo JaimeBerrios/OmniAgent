@@ -89,6 +89,7 @@ class ServiceMessageCreate(BaseModel):
     meta_message_id: str | None = Field(
         default=None, min_length=1, max_length=255
     )
+    canal: Literal["whatsapp", "messenger"] = "whatsapp"
 
 class ServiceMessageResponse(BaseModel):
     tenant_id: int

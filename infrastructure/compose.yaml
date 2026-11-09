@@ -112,6 +112,8 @@ services:
       APP_VERSION: ${APP_VERSION:-dev}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       MESSENGER_PAGE_ACCESS_TOKEN: ${MESSENGER_PAGE_ACCESS_TOKEN:?Token de Messenger requerido}
+      N8N_WEBHOOK_KEY: ${N8N_WEBHOOK_KEY:?Webhook key requerido}
+      N8N_WEBHOOK_URL: http://n8n:5678/webhook/omniagent-messenger
     depends_on:
       postgres:
         condition: service_healthy

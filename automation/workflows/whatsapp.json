@@ -1,0 +1,871 @@
+{
+  "id": "xe9Pbm72aVWQfxb0",
+  "name": "OmniAgent – Ingreso de mensajes | WhatsApp",
+  "description": null,
+  "active": true,
+  "activeVersionId": "a51d79a8-2bef-4bf6-bf7a-e734d72805f2",
+  "createdAt": "2026-11-01T17:25:37.534Z",
+  "updatedAt": "2026-11-08T18:39:37.735Z",
+  "isArchived": false,
+  "versionId": "a51d79a8-2bef-4bf6-bf7a-e734d72805f2",
+  "versionCounter": 137,
+  "sourceWorkflowId": null,
+  "triggerCount": 1,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "omniagent-mensajes",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "c5efbd9f-7d7b-40e2-8bb5-e445a1c69429",
+      "name": "01 – Recibir mensaje WhatsApp",
+      "webhookId": "6fbe23e9-7eea-4e79-be64-95355922943b",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "K1X0eFdIuthWMWVr",
+          "name": "OmniAgent WhatsApp Webhook"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a77968b3-8dad-451c-82b7-55d03f6c4bc1",
+              "name": "mensaje",
+              "value": "={{ $json.body.mensaje }}",
+              "type": "string"
+            },
+            {
+              "id": "12ab8b11-1b56-4148-9fad-a647e2b0ff17",
+              "name": "cliente_id",
+              "value": "={{ $json.body.cliente_id }}",
+              "type": "string"
+            },
+            {
+              "id": "bfdd7145-ed37-42dd-a515-e3c02ab88776",
+              "name": "meta_message_id",
+              "value": "={{ $json.body.meta_message_id ?? null }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "7a7394c2-03e0-467f-8d27-ed67f6053717",
+      "name": "02 – Normalizar mensaje entrante"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/messages/inbound",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "cliente_id",
+              "value": "={{ $('02 – Normalizar mensaje entrante').item.json.cliente_id }}"
+            },
+            {
+              "name": "mensaje",
+              "value": "={{ $('02 – Normalizar mensaje entrante').item.json.mensaje }}"
+            },
+            {
+              "name": "meta_message_id",
+              "value": "={{ $('02 – Normalizar mensaje entrante').item.json.meta_message_id ?? null }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        448,
+        0
+      ],
+      "id": "89c721ee-c9c8-433b-adf7-2cc8221e3ac6",
+      "name": "03 – Registrar mensaje en OmniAgent",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "eBkOFYpduFgwJyIl",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 4
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $('02 – Normalizar mensaje entrante').item.json.mensaje.toLowerCase() }}",
+                    "rightValue": "información",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    },
+                    "id": "3819d40d-c7c4-420d-a327-725f60d68363"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "informacion"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.5,
+      "position": [
+        672,
+        0
+      ],
+      "id": "fb5590d1-6bcb-432c-a6b2-02ed8d747b88",
+      "name": "04 – Clasificar tipo de consulta"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "84d08cfe-5771-44c0-a2d6-67ce3510749a",
+              "name": "respuesta",
+              "value": "¡Hola! Gracias por escribirnos. Hemos recibido tu mensaje y pronto te ayudaremos con tu consulta.",
+              "type": "string"
+            },
+            {
+              "id": "2eb728ac-8f3f-47ab-a1ce-3870a3e3b717",
+              "name": "cliente_id",
+              "value": "={{ $('02 – Normalizar mensaje entrante').item.json.cliente_id }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        944,
+        112
+      ],
+      "id": "24902f62-ed39-4aa1-8bee-6de184603549",
+      "name": "05B – Preparar respuesta general"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/messages/outbound",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "conversation_id",
+              "value": "={{ $('03 – Registrar mensaje en OmniAgent').item.json.conversation_id }}"
+            },
+            {
+              "name": "respuesta",
+              "value": "={{ $('05B – Preparar respuesta general').item.json.respuesta }}"
+            },
+            {
+              "name": "inbound_message_id",
+              "value": "={{ $('03 – Registrar mensaje en OmniAgent').item.json.message_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1200,
+        112
+      ],
+      "id": "1652730a-e3a3-4c9e-97a4-747264c9197d",
+      "name": "06B – Registrar respuesta general",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "eBkOFYpduFgwJyIl",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ {\n  respuesta: $('02 – Normalizar mensaje entrante').item.json.mensaje.toLowerCase().includes('información')\n    ? $('05A – Preparar respuesta informativa').first().json.respuesta\n    : $('05B – Preparar respuesta general').first().json.respuesta,\n  cliente_id: $('02 – Normalizar mensaje entrante').item.json.cliente_id\n} }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1408,
+        0
+      ],
+      "id": "60c81dec-4ddb-42e3-9c41-c475edb550a8",
+      "name": "07 – Confirmar recepción"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f58c1c99-e7d5-4783-8ac6-65a820a83e33",
+              "name": "respuesta",
+              "value": "¡Hola! Gracias por contactarnos. Con gusto podemos brindarte información sobre nuestros servicios.",
+              "type": "string"
+            },
+            {
+              "id": "c902b463-b2d4-4a2c-9cb5-fc81bcd2e95e",
+              "name": "conversation_id",
+              "value": "={{ $('03 – Registrar mensaje en OmniAgent').item.json.conversation_id }}",
+              "type": "number"
+            },
+            {
+              "id": "c635c17c-c51b-48ae-b532-b6c651ff3dbb",
+              "name": "inbound_message_id",
+              "value": "={{ $('03 – Registrar mensaje en OmniAgent').item.json.message_id }}",
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        944,
+        -80
+      ],
+      "id": "fb3ecaf2-7de6-4b64-b35e-4e2eebda90b4",
+      "name": "05A – Preparar respuesta informativa"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://api:8000/internal/messages/outbound",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "conversation_id",
+              "value": "={{ $('05A – Preparar respuesta informativa').item.json.conversation_id }}"
+            },
+            {
+              "name": "respuesta",
+              "value": "={{ $('05A – Preparar respuesta informativa').item.json.respuesta }}"
+            },
+            {
+              "name": "inbound_message_id",
+              "value": "={{ $('05A – Preparar respuesta informativa').item.json.inbound_message_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1200,
+        -80
+      ],
+      "id": "a87ebbfc-d1f9-4f89-8f5a-914319cd1d88",
+      "name": "06A – Registrar respuesta informativa",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "eBkOFYpduFgwJyIl",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "01 – Recibir mensaje WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "02 – Normalizar mensaje entrante",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "02 – Normalizar mensaje entrante": {
+      "main": [
+        [
+          {
+            "node": "03 – Registrar mensaje en OmniAgent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "03 – Registrar mensaje en OmniAgent": {
+      "main": [
+        [
+          {
+            "node": "04 – Clasificar tipo de consulta",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "04 – Clasificar tipo de consulta": {
+      "main": [
+        [
+          {
+            "node": "05A – Preparar respuesta informativa",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "05B – Preparar respuesta general",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "05B – Preparar respuesta general": {
+      "main": [
+        [
+          {
+            "node": "06B – Registrar respuesta general",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "06B – Registrar respuesta general": {
+      "main": [
+        [
+          {
+            "node": "07 – Confirmar recepción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "05A – Preparar respuesta informativa": {
+      "main": [
+        [
+          {
+            "node": "06A – Registrar respuesta informativa",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "06A – Registrar respuesta informativa": {
+      "main": [
+        [
+          {
+            "node": "07 – Confirmar recepción",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "nodeGroups": [],
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": [],
+  "shared": [
+    {
+      "role": "workflow:owner",
+      "workflowId": "xe9Pbm72aVWQfxb0",
+      "projectId": "ut6GEnfMr1dajEM0",
+      "project": {
+        "id": "ut6GEnfMr1dajEM0",
+        "name": "Jaime Berrios <ingjaime1999@gmail.com>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "56f15916-9220-4937-87ec-e4d22607ce0f",
+        "createdAt": "2026-11-01T14:14:39.165Z",
+        "updatedAt": "2026-11-01T16:27:35.684Z"
+      },
+      "createdAt": "2026-11-01T17:25:37.541Z",
+      "updatedAt": "2026-11-01T17:25:37.541Z"
+    }
+  ],
+  "activeVersion": {
+    "versionId": "a51d79a8-2bef-4bf6-bf7a-e734d72805f2",
+    "workflowId": "xe9Pbm72aVWQfxb0",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "omniagent-mensajes",
+          "authentication": "headerAuth",
+          "responseMode": "responseNode",
+          "options": {}
+        },
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2.2,
+        "position": [
+          0,
+          0
+        ],
+        "id": "c5efbd9f-7d7b-40e2-8bb5-e445a1c69429",
+        "name": "01 – Recibir mensaje WhatsApp",
+        "webhookId": "6fbe23e9-7eea-4e79-be64-95355922943b",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "K1X0eFdIuthWMWVr",
+            "name": "OmniAgent WhatsApp Webhook"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "a77968b3-8dad-451c-82b7-55d03f6c4bc1",
+                "name": "mensaje",
+                "value": "={{ $json.body.mensaje }}",
+                "type": "string"
+              },
+              {
+                "id": "12ab8b11-1b56-4148-9fad-a647e2b0ff17",
+                "name": "cliente_id",
+                "value": "={{ $json.body.cliente_id }}",
+                "type": "string"
+              },
+              {
+                "id": "bfdd7145-ed37-42dd-a515-e3c02ab88776",
+                "name": "meta_message_id",
+                "value": "={{ $json.body.meta_message_id ?? null }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.5,
+        "position": [
+          224,
+          0
+        ],
+        "id": "7a7394c2-03e0-467f-8d27-ed67f6053717",
+        "name": "02 – Normalizar mensaje entrante"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://api:8000/internal/messages/inbound",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "cliente_id",
+                "value": "={{ $('02 – Normalizar mensaje entrante').item.json.cliente_id }}"
+              },
+              {
+                "name": "mensaje",
+                "value": "={{ $('02 – Normalizar mensaje entrante').item.json.mensaje }}"
+              },
+              {
+                "name": "meta_message_id",
+                "value": "={{ $('02 – Normalizar mensaje entrante').item.json.meta_message_id ?? null }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          448,
+          0
+        ],
+        "id": "89c721ee-c9c8-433b-adf7-2cc8221e3ac6",
+        "name": "03 – Registrar mensaje en OmniAgent",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "eBkOFYpduFgwJyIl",
+            "name": "Header Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "rules": {
+            "values": [
+              {
+                "conditions": {
+                  "options": {
+                    "caseSensitive": true,
+                    "leftValue": "",
+                    "typeValidation": "strict",
+                    "version": 4
+                  },
+                  "conditions": [
+                    {
+                      "leftValue": "={{ $('02 – Normalizar mensaje entrante').item.json.mensaje.toLowerCase() }}",
+                      "rightValue": "información",
+                      "operator": {
+                        "type": "string",
+                        "operation": "contains"
+                      },
+                      "id": "3819d40d-c7c4-420d-a327-725f60d68363"
+                    }
+                  ],
+                  "combinator": "and"
+                },
+                "renameOutput": true,
+                "outputKey": "informacion"
+              }
+            ]
+          },
+          "options": {
+            "fallbackOutput": "extra"
+          }
+        },
+        "type": "n8n-nodes-base.switch",
+        "typeVersion": 3.5,
+        "position": [
+          672,
+          0
+        ],
+        "id": "fb5590d1-6bcb-432c-a6b2-02ed8d747b88",
+        "name": "04 – Clasificar tipo de consulta"
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "84d08cfe-5771-44c0-a2d6-67ce3510749a",
+                "name": "respuesta",
+                "value": "¡Hola! Gracias por escribirnos. Hemos recibido tu mensaje y pronto te ayudaremos con tu consulta.",
+                "type": "string"
+              },
+              {
+                "id": "2eb728ac-8f3f-47ab-a1ce-3870a3e3b717",
+                "name": "cliente_id",
+                "value": "={{ $('02 – Normalizar mensaje entrante').item.json.cliente_id }}",
+                "type": "string"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.5,
+        "position": [
+          944,
+          112
+        ],
+        "id": "24902f62-ed39-4aa1-8bee-6de184603549",
+        "name": "05B – Preparar respuesta general"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://api:8000/internal/messages/outbound",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "conversation_id",
+                "value": "={{ $('03 – Registrar mensaje en OmniAgent').item.json.conversation_id }}"
+              },
+              {
+                "name": "respuesta",
+                "value": "={{ $('05B – Preparar respuesta general').item.json.respuesta }}"
+              },
+              {
+                "name": "inbound_message_id",
+                "value": "={{ $('03 – Registrar mensaje en OmniAgent').item.json.message_id }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          1200,
+          112
+        ],
+        "id": "1652730a-e3a3-4c9e-97a4-747264c9197d",
+        "name": "06B – Registrar respuesta general",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "eBkOFYpduFgwJyIl",
+            "name": "Header Auth account"
+          }
+        }
+      },
+      {
+        "parameters": {
+          "respondWith": "json",
+          "responseBody": "={{ {\n  respuesta: $('02 – Normalizar mensaje entrante').item.json.mensaje.toLowerCase().includes('información')\n    ? $('05A – Preparar respuesta informativa').first().json.respuesta\n    : $('05B – Preparar respuesta general').first().json.respuesta,\n  cliente_id: $('02 – Normalizar mensaje entrante').item.json.cliente_id\n} }}",
+          "options": {
+            "responseCode": 200
+          }
+        },
+        "type": "n8n-nodes-base.respondToWebhook",
+        "typeVersion": 1.5,
+        "position": [
+          1408,
+          0
+        ],
+        "id": "60c81dec-4ddb-42e3-9c41-c475edb550a8",
+        "name": "07 – Confirmar recepción"
+      },
+      {
+        "parameters": {
+          "assignments": {
+            "assignments": [
+              {
+                "id": "f58c1c99-e7d5-4783-8ac6-65a820a83e33",
+                "name": "respuesta",
+                "value": "¡Hola! Gracias por contactarnos. Con gusto podemos brindarte información sobre nuestros servicios.",
+                "type": "string"
+              },
+              {
+                "id": "c902b463-b2d4-4a2c-9cb5-fc81bcd2e95e",
+                "name": "conversation_id",
+                "value": "={{ $('03 – Registrar mensaje en OmniAgent').item.json.conversation_id }}",
+                "type": "number"
+              },
+              {
+                "id": "c635c17c-c51b-48ae-b532-b6c651ff3dbb",
+                "name": "inbound_message_id",
+                "value": "={{ $('03 – Registrar mensaje en OmniAgent').item.json.message_id }}",
+                "type": "number"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.set",
+        "typeVersion": 3.5,
+        "position": [
+          944,
+          -80
+        ],
+        "id": "fb3ecaf2-7de6-4b64-b35e-4e2eebda90b4",
+        "name": "05A – Preparar respuesta informativa"
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "http://api:8000/internal/messages/outbound",
+          "authentication": "genericCredentialType",
+          "genericAuthType": "httpHeaderAuth",
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "conversation_id",
+                "value": "={{ $('05A – Preparar respuesta informativa').item.json.conversation_id }}"
+              },
+              {
+                "name": "respuesta",
+                "value": "={{ $('05A – Preparar respuesta informativa').item.json.respuesta }}"
+              },
+              {
+                "name": "inbound_message_id",
+                "value": "={{ $('05A – Preparar respuesta informativa').item.json.inbound_message_id }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.5,
+        "position": [
+          1200,
+          -80
+        ],
+        "id": "a87ebbfc-d1f9-4f89-8f5a-914319cd1d88",
+        "name": "06A – Registrar respuesta informativa",
+        "credentials": {
+          "httpHeaderAuth": {
+            "id": "eBkOFYpduFgwJyIl",
+            "name": "Header Auth account"
+          }
+        }
+      }
+    ],
+    "connections": {
+      "01 – Recibir mensaje WhatsApp": {
+        "main": [
+          [
+            {
+              "node": "02 – Normalizar mensaje entrante",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "02 – Normalizar mensaje entrante": {
+        "main": [
+          [
+            {
+              "node": "03 – Registrar mensaje en OmniAgent",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "03 – Registrar mensaje en OmniAgent": {
+        "main": [
+          [
+            {
+              "node": "04 – Clasificar tipo de consulta",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "04 – Clasificar tipo de consulta": {
+        "main": [
+          [
+            {
+              "node": "05A – Preparar respuesta informativa",
+              "type": "main",
+              "index": 0
+            }
+          ],
+          [
+            {
+              "node": "05B – Preparar respuesta general",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "05B – Preparar respuesta general": {
+        "main": [
+          [
+            {
+              "node": "06B – Registrar respuesta general",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "06B – Registrar respuesta general": {
+        "main": [
+          [
+            {
+              "node": "07 – Confirmar recepción",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "05A – Preparar respuesta informativa": {
+        "main": [
+          [
+            {
+              "node": "06A – Registrar respuesta informativa",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "06A – Registrar respuesta informativa": {
+        "main": [
+          [
+            {
+              "node": "07 – Confirmar recepción",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Jaime Berrios",
+    "name": "Version a51d79a8",
+    "description": "",
+    "autosaved": true,
+    "createdAt": "2026-11-08T18:39:37.737Z",
+    "updatedAt": "2026-11-08T18:53:37.000Z",
+    "workflowPublishHistory": [
+      {
+        "id": 6,
+        "workflowId": "xe9Pbm72aVWQfxb0",
+        "versionId": "a51d79a8-2bef-4bf6-bf7a-e734d72805f2",
+        "event": "activated",
+        "userId": "56f15916-9220-4937-87ec-e4d22607ce0f",
+        "createdAt": "2026-11-08T18:53:37.256Z"
+      }
+    ]
+  },
+  "parentFolder": null
+}
